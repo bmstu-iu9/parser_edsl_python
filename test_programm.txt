@@ -1,0 +1,60 @@
+import parser_edsl as pe
+from lexer import TokType as TokType
+from pars import MyParser
+
+# New Grammar Rules
+
+E = pe.NonTerminal('E')
+T = pe.NonTerminal('T')
+F = pe.NonTerminal('F')
+N = pe.NonTerminal('N')
+D = pe.NonTerminal('D')
+
+digit = pe.Terminal('[0-9]+', int)
+
+E |= T, '+', T, lambda t1, t2: t1 + t2
+E |= T
+E |= T, '-', T, lambda t1, t2: t1 - t2
+T |= F, '*', F, lambda f1, f2: f1 * f2
+T |= F, '/', F, lambda f1, f2: f1 / f2
+T |= F
+F |= N
+F |= '(', E, ')'
+N |= D
+N |= D, D
+D |= '0'
+D |= '1'
+D |= '2'
+D |= digit
+
+# Main programm
+
+def main():
+    # with open('test.txt', 'r') as file:
+        # data = file.read().replace('\n', ' ')
+    # lx = lex.Lexer(rules, data, skip_whitespace=True)
+    # tokens = []
+    # try:
+    #     for tok in lx.tokens():
+    #         print(tok)
+    #         tokens.append(tok)
+    # except lex.LexerError as err:
+    #     print('LexerError at position %s' % err.pos)
+    parser = pe.EDSL_Parser()
+    table = pe.ParsingTable(parser)
+    print("Parsing done.")
+
+    output_filename = 'parsing-table'
+
+    with open(output_filename + '.txt', 'w') as textfile:
+        textfile.write(pe.describe_grammar(parser))
+        textfile.write('\n\n')
+        textfile.write(pe.describe_parsing_table(table))
+    # tokens = ['1', '+', '1', '$end']
+    parser = MyParser(table)
+    parser.parse()
+    # print(lexer.tokArray)
+
+
+if __name__ == "__main__":
+    main()
