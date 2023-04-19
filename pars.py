@@ -4,7 +4,7 @@ from initialize_grammar import digit
 import inspect
 
 
-""" 
+"""
 Lexer error exception.
 """
 
@@ -21,8 +21,8 @@ stack = deque()
 attributes = deque()
 
 """
-Parser structure: 
-gets input as array list of tokens 
+Parser structure:
+gets input as array list of tokens
 lr table state action goto
 """
 

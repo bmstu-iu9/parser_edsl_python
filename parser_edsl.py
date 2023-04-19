@@ -129,7 +129,7 @@ class AttrToken:
 
     def __str__(self):
         return 'AttrToken %s (%s) at %s ' % (self.type, str(self.value), self.pos)
-      
+
 
 class LrZeroItemTableEntry:
     def __init__(self):
@@ -145,11 +145,11 @@ class ParsingTable:
     def __init__(self, gr):
         self.grammar = gr
 
-        self.terminals = ()  
-        self.nonterms = ()  
+        self.terminals = ()
+        self.nonterms = ()
         self.__ccol = ()
-        self.n_states = 0  
-        
+        self.n_states = 0
+
         self.goto = ()
         self.action = ()
 
@@ -230,7 +230,7 @@ class ParsingTable:
 
         gotos = [(nt, sid) for nt, sid in self.goto[state_id].items() if sid is not None]
         gotos = sorted(gotos, key=lambda elem: elem[0].name)
-       
+
         gotos_str = '\n'.join(self.__stringify_goto_entry(nt, sid) for nt, sid in gotos)
         gotos_str += ('\n' if len(gotos_str) > 0 else '')
 
@@ -264,7 +264,7 @@ def get_canonical_collection(gr):
     dfa = lr_zero.get_automaton(gr)
     kstates = [lr_zero.kernels(st) for st in dfa.states]
     n_states = len(kstates)
-    
+
     table = [{item: LrZeroItemTableEntry() for item in kstates[i]} for i in range(n_states)]
     table[0][(0, 0)].lookaheads.add(EOF_SYMBOL)
 
