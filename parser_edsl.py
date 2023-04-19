@@ -1,5 +1,3 @@
-import types
-import inspect
 import collections
 import re
 
@@ -26,9 +24,6 @@ class Terminal(BaseTerminal):
             return end - begin, attrib
         else:
             return 0, None
-
-    def __len__(self):
-        return 1
 
 
 class LiteralTerminal(BaseTerminal):
@@ -150,6 +145,11 @@ class LrZeroItemTableEntry:
         return pattern % (repr(self.propagates_to), repr(self.lookaheads))
 
 
+Shift = collections.namedtuple('Shift', 'state')
+Reduce = collections.namedtuple('Reduce', 'rule')
+Accept = collections.namedtuple('Accept', '')
+
+
 class ParsingTable:
     def __init__(self, gr):
         self.grammar = gr
@@ -197,13 +197,13 @@ class ParsingTable:
                         continue
 
                     next_state_id = goto_precalc[state_id][terminal]
-                    self.action[state_id][terminal].add(('shift and go to state', next_state_id))
+                    self.action[state_id][terminal].add(Shift(next_state_id))
                 else:
                     if prod_index == 0:
                         assert (next_symbol == EOF_SYMBOL)
-                        self.action[state_id][EOF_SYMBOL].add(('accept', ''))
+                        self.action[state_id][EOF_SYMBOL].add(Accept())
                     else:
-                        self.action[state_id][next_symbol].add(('reduce using rule', prod_index))
+                        self.action[state_id][next_symbol].add(Reduce(prod_index))
 
             for nt in self.nonterms:
                 if nt not in goto_precalc[state_id]:
@@ -213,8 +213,7 @@ class ParsingTable:
 
     @staticmethod
     def __stringify_action_entries(term, ent):
-        return '\tfor terminal %s: ' % term + \
-               ', '.join('%s %s' % (kind, str(arg)) for kind, arg in ent)
+        return '\tfor terminal %s: ' % term + ', '.join(map(str, ent))
 
     @staticmethod
     def __stringify_goto_entry(nt, sid):
@@ -254,7 +253,7 @@ class ParsingTable:
     def __get_entry_status(e):
         if len(e) <= 1:
             return STATUS_OK
-        n_actions = len(frozenset(x for x, y in e))
+        n_actions = len(frozenset(type(a) for a in e))
         return STATUS_SR_CONFLICT if n_actions == 2 else STATUS_RR_CONFLICT
 
     def get_single_state_conflict_status(self, state_id):
@@ -439,31 +438,27 @@ class EDSL_Parser(object):
 
     def parse(self, text):
         lexer = Lexer(self.terminals, text)
-        stack = [0]
-        attributes = []
+        stack = [(0, None)]
         cur = lexer.next_token()
         while True:
-            cur_state = stack[-1]
-            action = list(self.table.action[cur_state][cur.type])
-            if action == []:
+            cur_state, top_attr = stack[-1]
+            actions = list(self.table.action[cur_state][cur.type])
+            if actions == []:
                 raise Exception(cur_state, cur.type)
-            if action[0][0] == "shift and go to state":
-                attributes.append(cur.attr)
-                stack.append(action[0][1])
+            action = actions[0]
+            if isinstance(action, Shift):
+                stack.append((action.state, cur.attr))
                 cur = lexer.next_token()
-            elif action[0][0] == "reduce using rule":
-                lambda_func = self.table.grammar.productions[action[0][1]][2]
-                n = len(self.table.grammar.productions[action[0][1]][1])
-                attrs = [attr for attr in attributes[-n:] if attr != None]
+            elif isinstance(action, Reduce):
+                nt, prod, lambda_func = self.productions[action.rule]
+                n = len(prod)
+                attrs = [attr for state, attr in stack[-n:] if attr != None]
                 del stack[-n:]
-                del attributes[-n:]
-                goto_state = self.table.goto[stack[-1]][
-                    self.table.grammar.productions[action[0][1]][0]]
-                stack.append(goto_state)
-                attributes.append(lambda_func(*attrs))
-            elif action[0][0] == "accept":
-                assert(len(attributes) == 1)
-                return attributes[-1]
+                goto_state = self.table.goto[stack[-1][0]][nt]
+                stack.append((goto_state, lambda_func(*attrs)))
+            elif isinstance(action, Accept):
+                assert(len(stack) == 2)
+                return top_attr
 
 
 def goto(gr, item_set, inp):
