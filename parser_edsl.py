@@ -1,5 +1,7 @@
 import types
 import inspect
+import collections
+import re
 
 
 class Symbol:
@@ -14,6 +16,16 @@ class Terminal(BaseTerminal):
     def __init__(self, regex, func):
         self.regex = regex
         self.func = func
+        self.re = re.compile(regex, re.MULTILINE)
+
+    def match(self, string, pos):
+        m = self.re.match(string, pos)
+        if m != None:
+            begin, end = m.span()
+            attrib = self.func(string[begin:end])
+            return end - begin, attrib
+        else:
+            return 0, None
 
     def __len__(self):
         return 1
@@ -34,6 +46,12 @@ class LiteralTerminal(BaseTerminal):
 
     def __str__(self):
         return repr(self.image)
+
+    def match(self, string, pos):
+        if string.startswith(self.image, pos):
+            return len(self.image), None
+        else:
+            return 0, None
 
 
 class SpecTerminal(BaseTerminal):
@@ -96,7 +114,7 @@ class NonTerminal(Symbol):
             self.productions.append(symbols)
             self.lambdas.append(fold)
         elif isinstance(other, tuple):
-            self |= other + (lambda x: x,)
+            self |= other + (self.__default_fold,)
         elif isinstance(other, Symbol) or is_callable(other):
             self |= (other,)
         elif isinstance(other, str):
@@ -106,28 +124,20 @@ class NonTerminal(Symbol):
 
         return self
 
+    @staticmethod
+    def __default_fold(*args):
+        if len(args) == 1:
+            return args[0]
+        elif len(args) == 0:
+            return None
+        else:
+            raise RuntimeError('__default_fold', args)
+
     def enum_rules(self):
         return zip(self.productions, self.lambdas)
 
 
-# TODO: transfer to lexer class if not used
-class Token:
-    def __init__(self, type, pos):
-        self.type = type
-        self.pos = pos
-
-    def __str__(self):
-        return 'Token %s at %s ' % (self.type, self.pos)
-
-
-class AttrToken:
-    def __init__(self, type, value, pos):
-        self.type = type
-        self.value = value
-        self.pos = pos
-
-    def __str__(self):
-        return 'AttrToken %s (%s) at %s ' % (self.type, str(self.value), self.pos)
+Token = collections.namedtuple('Token', 'type pos attr')
 
 
 class LrZeroItemTableEntry:
@@ -338,8 +348,6 @@ def closure(gr, item_set):
 
 
 class EDSL_Parser(object):
-    __attrs__ = ['co']
-
     def __init__(self, start_nonterminal):
         fake_axiom = NonTerminal(START_SYMBOL)
         fake_axiom |= start_nonterminal
@@ -383,6 +391,7 @@ class EDSL_Parser(object):
         self.symbols = self.nonterms + self.terminals
 
         self.__build_first_sets()
+        self.table = ParsingTable(self)
 
     def first_set(self, x):
         result = set()
@@ -428,31 +437,35 @@ class EDSL_Parser(object):
     def __str__(self):
         return self.stringify()
 
-    def parse(self):
-        pos = 0
-        cur = tokens[pos]
+    def parse(self, text):
+        lexer = Lexer(self.terminals, text)
+        stack = [0]
+        attributes = []
+        cur = lexer.next_token()
         while True:
             cur_state = stack[-1]
             action = list(self.table.action[cur_state][cur.type])
+            if action == []:
+                raise Exception(cur_state, cur.type)
             if action[0][0] == "shift and go to state":
-                get_attr(cur)
+                attributes.append(cur.attr)
                 stack.append(action[0][1])
-                pos += 1
-                cur = tokens[pos]
+                cur = lexer.next_token()
             elif action[0][0] == "reduce using rule":
                 lambda_func = self.table.grammar.productions[action[0][1]][2]
-                apply_func(lambda_func)
                 n = len(self.table.grammar.productions[action[0][1]][1])
-                for i in range(n):
-                    stack.pop()
+                attrs = [attr for attr in attributes[-n:] if attr != None]
+                del stack[-n:]
+                del attributes[-n:]
                 goto_state = self.table.goto[stack[-1]][
-                    getNTerm(self.table.nonterms, self.table.grammar.productions[action[0][1]][0])]
+                    self.table.grammar.productions[action[0][1]][0]]
                 stack.append(goto_state)
-                pass
+                attributes.append(lambda_func(*attrs))
             elif action[0][0] == "accept":
                 print("Attribute stack ", attributes)
                 print("parsing is done: accept")
-                break
+                assert(len(attributes) == 1)
+                return attributes[-1]
 
 
 def goto(gr, item_set, inp):
@@ -583,3 +596,27 @@ class LR0_Automaton:
 
     def kstates(self):
         return [LR0_Automaton.__kernels(st) for st in self.states]
+
+
+class Lexer:
+    def __init__(self, domains, text):
+        self.domains = domains
+        self.text = text
+        self.pos = 0
+
+    def next_token(self):
+        while self.pos < len(self.text) and self.text[self.pos].isspace():
+            self.pos += 1
+
+        if self.pos == len(self.text):
+            return Token(EOF_SYMBOL, self.pos, None)
+
+        matches = [(d, *d.match(self.text, self.pos)) for d in self.domains]
+        domain, length, attr = max(matches, key=lambda t: t[1])
+
+        if length > 0:
+            token = Token(domain, self.pos, attr)
+            self.pos += length
+            return token
+        else:
+            raise RuntimeError('lexer error')
