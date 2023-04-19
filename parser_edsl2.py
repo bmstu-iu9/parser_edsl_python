@@ -428,6 +428,32 @@ class EDSL_Parser(object):
     def __str__(self):
         return self.stringify()
 
+    def parse(self):
+        pos = 0
+        cur = tokens[pos]
+        while True:
+            cur_state = stack[-1]
+            action = list(self.table.action[cur_state][cur.type])
+            if action[0][0] == "shift and go to state":
+                get_attr(cur)
+                stack.append(action[0][1])
+                pos += 1
+                cur = tokens[pos]
+            elif action[0][0] == "reduce using rule":
+                lambda_func = self.table.grammar.productions[action[0][1]][2]
+                apply_func(lambda_func)
+                n = len(self.table.grammar.productions[action[0][1]][1])
+                for i in range(n):
+                    stack.pop()
+                goto_state = self.table.goto[stack[-1]][
+                    getNTerm(self.table.nonterms, self.table.grammar.productions[action[0][1]][0])]
+                stack.append(goto_state)
+                pass
+            elif action[0][0] == "accept":
+                print("Attribute stack ", attributes)
+                print("parsing is done: accept")
+                break
+
 
 def goto(gr, item_set, inp):
     result_set = set()
