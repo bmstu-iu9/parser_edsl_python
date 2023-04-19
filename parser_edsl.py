@@ -2,12 +2,16 @@ import lr_zero as lr_zero
 import types
 import inspect
 
-nonTerminals = []
+
+class Symbol:
+    pass
 
 
-SKIP = object()
+class BaseTerminal(Symbol):
+    pass
 
-class Terminal:
+
+class Terminal(BaseTerminal):
     def __init__(self, regex, func):
         self.regex = regex
         self.func = func
@@ -15,10 +19,43 @@ class Terminal:
     def __len__(self):
         return 1
 
-class NonTerminal:
-    def __init__(self, name, productions=[]):
+
+class LiteralTerminal(BaseTerminal):
+    def __init__(self, image):
+        self.image = image
+
+    def __hash__(self):
+        return hash(self.image)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and self.image == other.image
+
+    def __repr__(self):
+        return f'LiteralTerminal({self.image!r})'
+
+    def __str__(self):
+        return repr(self.image)
+
+
+class SpecTerminal(BaseTerminal):
+    def __init__(self, name):
         self.name = name
-        self.productions = [(x.split() if isinstance(x, str) else x) for x in productions]
+
+    def __repr__(self):
+        return f'SpecTerminal({self.name})'
+
+    def __str__(self):
+        return self.name
+
+
+EOF_SYMBOL = SpecTerminal('$$')
+FREE_SYMBOL = SpecTerminal('##')
+
+
+class NonTerminal(Symbol):
+    def __init__(self, name):
+        self.name = name
+        self.productions = []
         self.lambdas = []
 
     def __repr__(self):
@@ -41,27 +78,38 @@ class NonTerminal:
         rules = separator.join(strprod(prod) for prod in self.productions)
         return title + rules
 
-    def __ior__(self, other):
-        if isinstance(other, tuple) and isinstance(other[-1], types.FunctionType):
-            self.productions.append(other[:-1])
-            self.lambdas.append(other[-1])
-        elif isinstance(other, NonTerminal) or isinstance(other, str):
-            self.productions.append([other])
-            self.lambdas.append(lambda s: s)
-        elif isinstance(other, tuple):
-            self.productions.append(other)
-            self.lambdas.append(lambda s: s)
-        elif isinstance(other, Terminal):
-            self.productions.append([other])
-            self.lambdas.append(lambda s: s)
+
+    @staticmethod
+    def __wrap_literals(symbol):
+        if isinstance(symbol, str):
+            return LiteralTerminal(symbol)
         else:
-            self.productions.append(other)
-            self.lambdas.append(lambda s: s)
+            assert isinstance(symbol, Symbol)
+            return symbol
+
+
+    def __ior__(self, other):
+        is_callable = lambda obj: hasattr(obj, '__call__')
+
+        if isinstance(other, tuple) and is_callable(other[-1]):
+            *symbols, fold = other
+            symbols = [self.__wrap_literals(sym) for sym in symbols]
+            self.productions.append(symbols)
+            self.lambdas.append(fold)
+        elif isinstance(other, tuple):
+            self |= other + (lambda x: x,)
+        elif isinstance(other, Symbol) or is_callable(other):
+            self |= (other,)
+        elif isinstance(other, str):
+            self |= (LiteralTerminal(other),)
+        else:
+            raise Exception('Bad rule')
+
         return self
 
+    def enum_rules(self):
+        return zip(self.productions, self.lambdas)
 
-# Expr = NonTerminal('Expr', ["Expr + ExprTerm"])
-# print(Expr.productions)
 
 # TODO: transfer to lexer class if not used
 class Token:
@@ -136,7 +184,7 @@ class ParsingTable:
 
                 if dot < len(pbody):
                     terminal = pbody[dot]
-                    if not (isinstance(terminal, str) or isinstance(terminal, Terminal)) or terminal not in goto_precalc[state_id]:
+                    if not isinstance(terminal, BaseTerminal) or terminal not in goto_precalc[state_id]:
                         continue
 
                     next_state_id = goto_precalc[state_id][terminal]
@@ -168,7 +216,7 @@ class ParsingTable:
         pname, pbody, plambda = self.grammar.productions[prod_index]
         dotted_pbody = pbody[:dot] + ['.'] + pbody[dot:]
         dotted_pbody_str = ' '.join(str(x) for x in dotted_pbody)
-        return RULE_INDEXING_PATTERN % (prod_index, pname + ': ' + dotted_pbody_str)
+        return RULE_INDEXING_PATTERN % (prod_index, pname.name + ': ' + dotted_pbody_str)
 
     def stringify_state(self, state_id):
         state_title = 'State %d\n' % state_id
@@ -293,111 +341,82 @@ def closure(gr, item_set):
 class EDSL_Parser(object):
     __attrs__ = ['co']
 
-    def __init__(self, start_nonterminal=None):
-        # Стартовый символ либо передается, либо берется из первого правила
-        if start_nonterminal is None or start_nonterminal not in nonTerminals:
-            start_nonterminal = nonTerminals[0]
+    def __init__(self, start_nonterminal):
+        fake_axiom = NonTerminal(START_SYMBOL)
+        fake_axiom |= start_nonterminal
 
-            self.nonterms = tuple([NonTerminal(START_SYMBOL, [[start_nonterminal.name]])] +
-                              sorted(nonTerminals, key=lambda elem: elem.name))
-
-        # TODO: FIX THAT ACCEPT DOESNT HAVE LAMBDA
-        self.nonterms[0].lambdas.append(lambda s: s[1:-1])
-
-        self.terminals = ()
+        self.nonterms = []
+        self.terminals = set()
         self.symbols = ()
-        self.productions = ()
+        self.productions = []
         self.nonterm_offset = {}
         self.__first_sets = {}
 
-        nonterminal_by_name = {nt.name: nt for nt in self.nonterms}
-        for nt in self.nonterms:
-            for prod in nt.productions:
-                for idx in range(len(prod)):
-                    symbol = prod[idx]
-                    if isinstance(symbol, str):
-                        if symbol in nonterminal_by_name:
-                            prod[idx] = nonterminal_by_name[symbol]
-                        else:
-                            # если в продукции появляется символ не из списка нетерминалов
-                            self.terminals += tuple([symbol])
-                    elif isinstance(symbol, NonTerminal):
-                        if symbol not in self.nonterms:
-                            msg = 'Non-terminal %s is not in the grammar' % repr(symbol)
-                            raise KeyError(msg)
-                    elif isinstance(symbol, Terminal):
-                        self.terminals += tuple([symbol])
-                    else:
-                        msg = "Unsupported type '%s' inside of production " % type(symbol).__name__
-                        raise TypeError(msg)
+        def register(symbol):
+            if isinstance(symbol, BaseTerminal):
+                self.terminals.add(symbol)
+            else:
+                assert(isinstance(symbol, NonTerminal))
+                if symbol not in self.nonterms:
+                    self.nonterms.append(symbol)
 
-        self.terminals = tuple(set(self.terminals))
+            return symbol
+
+        register(fake_axiom)
+
+        scanned_count = 0
+        while scanned_count < len(self.nonterms):
+            last_unscanned = len(self.nonterms)
+
+            for nt_idx in range(scanned_count, last_unscanned):
+                nt = self.nonterms[nt_idx]
+                self.nonterm_offset[nt] = len(self.productions)
+
+                for prod, func in nt.enum_rules():
+                    for symbol in prod:
+                        register(symbol)
+                    self.productions.append((nt, prod, func))
+
+            scanned_count = last_unscanned
+
+        self.terminals = tuple(sorted(self.terminals, key=id))
+        self.nonterms = tuple(sorted(self.nonterms, key=lambda nt: nt.name))
         self.symbols = self.nonterms + self.terminals
-
-        for nt in self.nonterms:
-            self.nonterm_offset[nt] = len(self.productions)
-            self.productions += tuple(
-                (nt.name, list(prod), nt.lambdas[idx]) for (idx, prod) in enumerate(nt.productions))
-        # for (idx, prod) in enumerate(self.productions):
-        # print(idx, inspect.getsource(prod[2]))
-        # if len(nt.lambdas) > 0:
-        #     for (idx, prod) in enumerate(nt.productions):
-        #         print(nt.name, prod, inspect.getsource(nt.lambdas[idx]))
-        # print("NT ", nt.name)
-        # for lamb in nt.lambdas:
-        #     print(inspect.getsource(lamb))
 
         self.__build_first_sets()
 
     def first_set(self, x):
         result = set()
-
-        if isinstance(x, str):
-            result.add(x)
-        elif isinstance(x, NonTerminal):
-            result = self.__first_sets[x]
-        else:
-            skippable_symbols = 0
-            for sym in x:
-                fs = self.first_set(sym)
-                result.update(fs - {None})
-                if None in fs:
-                    skippable_symbols += 1
-                else:
-                    break
-            if skippable_symbols == len(x):
-                result.add(None)
+        skippable_symbols = 0
+        for sym in x:
+            fs = self.__first_sets.get(sym, {sym})
+            result.update(fs - {None})
+            if None in fs:
+                skippable_symbols += 1
+            else:
+                break
+        if skippable_symbols == len(x):
+            result.add(None)
         return frozenset(result)
 
     def __build_first_sets(self):
-        for s in self.symbols:
-            if isinstance(s, str) or isinstance(s, Terminal):
-                self.__first_sets[s] = {s}
-            else:
-                self.__first_sets[s] = set()
-                if [] in s.productions:
-                    self.__first_sets[s].add(None)
+        for s in self.nonterms:
+            self.__first_sets[s] = set()
+            if [] in s.productions:
+                self.__first_sets[s].add(None)
 
         repeat = True
         while repeat:
             repeat = False
-            for nt in self.nonterms:
+
+            for nt, prod, func in self.productions:
                 curfs = self.__first_sets[nt]
                 curfs_len = len(curfs)
+                curfs.update(self.first_set(prod))
 
-                for prod in nt.productions:
-                    skippable_symbols = 0
-                    for sym in prod:
-                        fs = self.__first_sets[sym]
-                        curfs.update(fs - {None})
-                        if None in fs:
-                            skippable_symbols += 1
-                        else:
-                            break
-                    if skippable_symbols == len(prod):
-                        curfs.add(None)
                 if len(curfs) > curfs_len:
                     repeat = True
+
         self.__first_sets = {x: frozenset(y) for x, y in self.__first_sets.items()}
 
     def stringify(self, indexes=True):
@@ -464,8 +483,6 @@ def describe_parsing_table(table):
 
 RULE_INDEXING_PATTERN = '%-5d%s'
 START_SYMBOL = '$accept'
-EOF_SYMBOL = '$end'
-FREE_SYMBOL = '$#'
 
 STATUS_OK = 0
 STATUS_SR_CONFLICT = 1
