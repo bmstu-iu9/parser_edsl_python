@@ -462,8 +462,6 @@ class EDSL_Parser(object):
                 stack.append(goto_state)
                 attributes.append(lambda_func(*attrs))
             elif action[0][0] == "accept":
-                print("Attribute stack ", attributes)
-                print("parsing is done: accept")
                 assert(len(attributes) == 1)
                 return attributes[-1]
 
