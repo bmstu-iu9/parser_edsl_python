@@ -261,8 +261,8 @@ class ParsingTable:
 
 
 def get_canonical_collection(gr):
-    dfa = lr_zero.get_automaton(gr)
-    kstates = [lr_zero.kernels(st) for st in dfa.states]
+    dfa = lr_zero.Automaton(gr)
+    kstates = dfa.kstates()
     n_states = len(kstates)
 
     table = [{item: LrZeroItemTableEntry() for item in kstates[i]} for i in range(n_states)]
