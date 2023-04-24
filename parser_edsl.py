@@ -24,10 +24,11 @@ class BaseTerminal(Symbol):
 
 
 class Terminal(BaseTerminal):
-    def __init__(self, name, regex, func, re_flags = re.MULTILINE):
+    def __init__(self, name, regex, func, *, priority=5, re_flags=re.MULTILINE):
         self.name = name
         self.regex = regex
         self.func = func
+        self.priority = priority
         self.re = re.compile(regex, re_flags)
 
     def __repr__(self):
@@ -49,6 +50,7 @@ class Terminal(BaseTerminal):
 class LiteralTerminal(BaseTerminal):
     def __init__(self, image):
         self.image = image
+        self.priority = 10
 
     def __hash__(self):
         return hash(self.image)
@@ -715,8 +717,10 @@ class Lexer:
     def next_token(self):
         while self.pos.offset < len(self.text):
             offset = self.pos.offset
-            matches = [(d, *d.match(self.text, offset)) for d in self.domains]
-            domain, length, attr = max(matches, key=lambda t: t[1])
+            matches = [(d, d.priority, *d.match(self.text, offset))
+                       for d in self.domains]
+            domain, priority, length, attr = \
+                    max(matches, key=lambda t: (t[2], t[1]))
 
             if length > 0:
                 new_pos = self.pos.shift(self.text[offset:offset + length])
