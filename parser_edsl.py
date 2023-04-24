@@ -2,6 +2,7 @@ import abc
 import collections
 import dataclasses
 import re
+import sys
 
 
 __all__ = '''
@@ -560,6 +561,12 @@ class Parser(object):
             yield token
             if token.type == EOF_SYMBOL:
                 break
+
+    def is_lalr_one(self):
+        return self.table.is_lalr_one()
+
+    def print_table(self, file=sys.stdout):
+        print(self.table.stringify(), file=file)
 
 
 def goto(gr, item_set, inp):

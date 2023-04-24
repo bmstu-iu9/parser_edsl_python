@@ -17,6 +17,7 @@ F |= integer
 F |= real
 F |= '(', E, ')'
 p = Parser(E)
+assert p.is_lalr_one()
 p.add_skipped_domain('\\s')
 p.add_skipped_domain('\\{.*?\\}')
 
@@ -57,3 +58,15 @@ test('')
 title('Токены:')
 for token in p.get_tokens('3e8+{комментарий}*\n(  /-100500mod100.500)'):
     print(token.pos, ':', token)
+
+title('Пример на не-LALR(1)-грамматику:')
+
+pal = NonTerminal('palindrome')
+pal |= 'a'
+pal |= 'a', pal, 'a'
+pal_par = Parser(pal)
+
+print('Грамматика палиндромов LALR(1)?', pal_par.is_lalr_one())
+print()
+print('Таблица грамматики палиндромов:')
+pal_par.print_table()
