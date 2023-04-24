@@ -2,6 +2,8 @@ import re
 from parser_edsl import *
 
 
+# ZeroDiv и checked_div нужны для примера учёта координат в действиях
+
 class ZeroDiv(Error):
     def __init__(self, pos):
         self.pos = pos
@@ -21,26 +23,44 @@ def checked_div(values, coords, res_coord):
         raise ZeroDiv(cy)
 
 
-E, T, F = map(NonTerminal, 'ETF')
+# Определения нетерминальных символов
+Expr = NonTerminal('Expr')
+Term = NonTerminal('Term')
+Factor = NonTerminal('Factor')
+
+# Определения терминальных символов
+
+# Строка из десятичных цифр подходит под оба регулярных выражения,
+# поэтому для целых чисел повышаем приоритет (по умолчанию — 5)
 integer = Terminal('INTEGER', '[0-9]+', int, priority=7)
 real = Terminal('REAL', '[0-9]+(\\.[0-9]*)?([eE][-+]?[0-9]+)?', float)
+
+# Ключевое слово без учёта регистра (тоже повышаем приоритет)
 kw_mod = Terminal('MOD', 'mod', lambda x: None,
                   re_flags=re.IGNORECASE, priority=10)
-E |= E, '+', T, lambda x, y: x + y
-E |= E, '-', T, lambda x, y: x - y
-E |= T
-T |= T, '*', F, lambda x, y: x * y
-T |= T, '/', F, ExAction(checked_div)
-T |= T, kw_mod, F, lambda x, y: x % y
-T |= F
-F |= integer
-F |= real
-F |= '(', E, ')'
-p = Parser(E)
+
+# Определение правил грамматики
+Expr |= Expr, '+', Term, lambda x, y: x + y
+Expr |= Expr, '-', Term, lambda x, y: x - y
+Expr |= Term
+Term |= Term, '*', Factor, lambda x, y: x * y
+Term |= Term, '/', Factor, ExAction(checked_div) # Деление с проверкой
+Term |= Term, kw_mod, Factor, lambda x, y: x % y
+Term |= Factor
+Factor |= integer
+Factor |= real
+Factor |= '(', Expr, ')'
+
+# Создаём парсер и проверяем грамматику на LALR(1)
+p = Parser(Expr)
 assert p.is_lalr_one()
+
+# Игнорируем пробельные символы и комментарии вида {...}
 p.add_skipped_domain('\\s')
 p.add_skipped_domain('\\{.*?\\}')
 
+
+# Тесты
 
 def test(text):
     try:
@@ -79,6 +99,10 @@ test('2 + 3.5*4/(76-76)')
 title('Токены:')
 for token in p.get_tokens('3e8+{комментарий}*\n(  /-100500mod100.500)'):
     print(token.pos, ':', token)
+
+
+# Пример отладки не-LALR(1)-грамматики — у неё is_lalr_one() вернёт False,
+# в отладочной печати таблицы можно наблюдать конфликты
 
 title('Пример на не-LALR(1)-грамматику:')
 
