@@ -88,6 +88,15 @@ EOF_SYMBOL = SpecTerminal('EOF')
 FREE_SYMBOL = SpecTerminal('#')
 
 
+class ErrorTerminal(BaseTerminal):
+    priority = -1
+
+    @staticmethod
+    def match(string, pos):
+        assert pos < len(string)
+        return 1, ErrorTerminal
+
+
 @dataclasses.dataclass(frozen = True)
 class ExAction():
     callee : object
@@ -140,7 +149,9 @@ class NonTerminal(Symbol):
         is_callable = lambda obj: hasattr(obj, '__call__')
         is_fold = lambda obj: is_callable(obj) or isinstance(obj, ExAction)
 
-        if isinstance(other, tuple) and isinstance(other[-1], ExAction):
+        if other == ():
+            self |= lambda: None
+        elif isinstance(other, tuple) and isinstance(other[-1], ExAction):
             *symbols, fold = other
             symbols = [self.__wrap_literals(sym) for sym in symbols]
             self.productions.append(symbols)
@@ -553,14 +564,14 @@ class Parser(object):
                 case Reduce(rule):
                     nt, prod, fold = self.productions[rule]
                     n = len(prod)
-                    attrs = [attr for state, coord, attr in stack[-n:]
+                    attrs = [attr for state, coord, attr in stack[len(stack)-n:]
                              if attr != None]
-                    coords = [coord for state, coord, attr in stack[-n:]]
+                    coords = [coord for state, coord, attr in stack[len(stack)-n:]]
                     if len(coords) > 0:
                         res_coord = Fragment(coords[0].start, coords[-1].following)
                     else:
                         res_coord = Fragment(cur.pos.start, cur.pos.start)
-                    del stack[-n:]
+                    del stack[len(stack)-n:]
                     goto_state = self.table.goto[stack[-1][0]][nt]
                     res_attr = fold.callee(attrs, coords, res_coord)
                     stack.append((goto_state, res_coord, res_attr))
@@ -743,6 +754,7 @@ class Lexer:
         self.skip_token = object()
         self.domains += [Terminal('-skip-', regex, lambda _: self.skip_token)
                          for regex in skip]
+        self.domains.append(ErrorTerminal())
 
     def next_token(self):
         while self.pos.offset < len(self.text):
@@ -752,14 +764,16 @@ class Lexer:
             domain, priority, length, attr = \
                     max(matches, key=lambda t: (t[2], t[1]))
 
-            if length > 0:
-                new_pos = self.pos.shift(self.text[offset:offset + length])
-                frag = Fragment(self.pos, new_pos)
-                self.pos = new_pos
-                if attr != self.skip_token:
-                    token = Token(domain, frag, attr)
-                    return token
-            else:
+            assert length > 0
+
+            if attr == ErrorTerminal:
                 raise LexerError(self.pos, self.text)
+
+            new_pos = self.pos.shift(self.text[offset:offset + length])
+            frag = Fragment(self.pos, new_pos)
+            self.pos = new_pos
+            if attr != self.skip_token:
+                token = Token(domain, frag, attr)
+                return token
 
         return Token(EOF_SYMBOL, Fragment(self.pos, self.pos), None)

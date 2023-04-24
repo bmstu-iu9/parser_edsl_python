@@ -129,3 +129,17 @@ print('Грамматика палиндромов LALR(1)?', pal_par.is_lalr_on
 print()
 print('Таблица грамматики палиндромов:')
 pal_par.print_table()
+
+
+# Пример на работу с пустыми правилами
+
+title('Работа с пустой грамматикой:')
+Empty = NonTerminal('Empty')
+Empty |= ()
+parser_empty = Parser(Empty)
+print(parser_empty.parse(''))
+
+try:
+    parser_empty.parse('x')
+except Error as e:
+    print(e.pos, e.message)
