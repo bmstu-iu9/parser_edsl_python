@@ -532,26 +532,27 @@ class Parser(object):
             cur_state, top_attr = stack[-1]
             actions = list(self.table.action[cur_state][cur.type]) or [ERROR]
             action = actions[0]
-            if isinstance(action, Shift):
-                stack.append((action.state, cur.attr))
-                cur = lexer.next_token()
-            elif isinstance(action, Reduce):
-                nt, prod, lambda_func = self.productions[action.rule]
-                n = len(prod)
-                attrs = [attr for state, attr in stack[-n:] if attr != None]
-                del stack[-n:]
-                goto_state = self.table.goto[stack[-1][0]][nt]
-                stack.append((goto_state, lambda_func(*attrs)))
-            elif isinstance(action, Accept):
-                assert(len(stack) == 2)
-                return top_attr
-            else:
-                assert action == ERROR
-                expected = [symbol for symbol, actions
-                            in self.table.action[cur_state].items()
-                            if len(actions) > 0]
-                raise ParseError(pos=cur.pos.start, unexpected=cur,
-                                 expected=expected)
+            match action:
+                case Shift(state):
+                    stack.append((state, cur.attr))
+                    cur = lexer.next_token()
+                case Reduce(rule):
+                    nt, prod, lambda_func = self.productions[rule]
+                    n = len(prod)
+                    attrs = [attr for state, attr in stack[-n:] if attr != None]
+                    del stack[-n:]
+                    goto_state = self.table.goto[stack[-1][0]][nt]
+                    stack.append((goto_state, lambda_func(*attrs)))
+                case Accept():
+                    assert(len(stack) == 2)
+                    return top_attr
+                case _:
+                    assert action == ERROR
+                    expected = [symbol for symbol, actions
+                                in self.table.action[cur_state].items()
+                                if len(actions) > 0]
+                    raise ParseError(pos=cur.pos.start, unexpected=cur,
+                                     expected=expected)
 
     def get_tokens(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
