@@ -411,7 +411,7 @@ def closure(gr, item_set):
 
 
 class Error(Exception, abc.ABC):
-    @abc.abstractmethod
+    @abc.abstractproperty
     def message(self):
         pass
 
@@ -422,6 +422,7 @@ class ParseError(Error):
     unexpected : Symbol
     expected : list
 
+    @property
     def message(self):
         expected = ', '.join(map(str, self.expected))
         return f'Неожиданный символ {self.unexpected}, ' \
@@ -701,6 +702,7 @@ class LexerError(Error):
     def __repr__(self):
         return f'LexerError({self.pos!r},{self.bad!r})'
 
+    @property
     def message(self):
         return f'Не удалось разобрать {self.bad!r}'
 

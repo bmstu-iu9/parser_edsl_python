@@ -19,7 +19,7 @@ def test(text):
     try:
         print('ОК:', p.parse(text))
     except Error as e:
-        print(f'Ошибка {e.pos}:', e.message())
+        print(f'Ошибка {e.pos}: {e.message}')
 
 
 def title(message):
