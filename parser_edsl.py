@@ -1,5 +1,18 @@
+import abc
 import collections
+import dataclasses
 import re
+
+
+__all__ = '''
+Terminal
+NonTerminal
+EOF_SYMBOL
+Position
+Fragment
+EDSL_Parser
+Error
+'''.split()
 
 
 class Symbol:
@@ -11,10 +24,17 @@ class BaseTerminal(Symbol):
 
 
 class Terminal(BaseTerminal):
-    def __init__(self, regex, func):
+    def __init__(self, name, regex, func, re_flags = re.MULTILINE):
+        self.name = name
         self.regex = regex
         self.func = func
-        self.re = re.compile(regex, re.MULTILINE)
+        self.re = re.compile(regex, re_flags)
+
+    def __repr__(self):
+        return f'Terminal({self.name!r},{self.regex!r},{self.func!r})'
+
+    def __str__(self):
+        return self.name
 
     def match(self, string, pos):
         m = self.re.match(string, pos)
@@ -60,8 +80,8 @@ class SpecTerminal(BaseTerminal):
         return self.name
 
 
-EOF_SYMBOL = SpecTerminal('$$')
-FREE_SYMBOL = SpecTerminal('##')
+EOF_SYMBOL = SpecTerminal('EOF')
+FREE_SYMBOL = SpecTerminal('#')
 
 
 class NonTerminal(Symbol):
@@ -132,7 +152,48 @@ class NonTerminal(Symbol):
         return zip(self.productions, self.lambdas)
 
 
-Token = collections.namedtuple('Token', 'type pos attr')
+@dataclasses.dataclass(frozen = True)
+class Position:
+    offset : int = 0
+    line : int = 1
+    col : int = 1
+
+    def shift(self, text : str):
+        offset, line, col = dataclasses.astuple(self)
+
+        for char in text:
+            if char == '\n':
+                line += 1
+                col = 1
+            else:
+                col += 1
+
+        return Position(offset + len(text), line, col)
+
+    def __str__(self):
+        return f'({self.line}, {self.col})'
+
+
+@dataclasses.dataclass(frozen = True)
+class Fragment:
+    start : Position
+    following : Position
+
+    def __str__(self):
+        return f'{self.start}-{self.following}'
+
+
+@dataclasses.dataclass
+class Token:
+    type : BaseTerminal
+    pos : Fragment
+    attr : object
+
+    def __str__(self):
+        if self.attr is not None:
+            return f'{self.type}({self.attr})'
+        else:
+            return str(self.type)
 
 
 class LrZeroItemTableEntry:
@@ -148,6 +209,7 @@ class LrZeroItemTableEntry:
 Shift = collections.namedtuple('Shift', 'state')
 Reduce = collections.namedtuple('Reduce', 'rule')
 Accept = collections.namedtuple('Accept', '')
+ERROR = object()
 
 
 class ParsingTable:
@@ -346,6 +408,24 @@ def closure(gr, item_set):
     return frozenset(result)
 
 
+class Error(Exception, abc.ABC):
+    @abc.abstractmethod
+    def message(self):
+        pass
+
+
+@dataclasses.dataclass
+class ParseError(Error):
+    pos : Position
+    unexpected : Symbol
+    expected : list
+
+    def message(self):
+        expected = ', '.join(map(str, self.expected))
+        return f'Неожиданный символ {self.unexpected}, ' \
+                + f'ожидалось {expected}'
+
+
 class EDSL_Parser(object):
     def __init__(self, start_nonterminal):
         fake_axiom = NonTerminal(START_SYMBOL)
@@ -388,6 +468,7 @@ class EDSL_Parser(object):
         self.terminals = tuple(sorted(self.terminals, key=id))
         self.nonterms = tuple(sorted(self.nonterms, key=lambda nt: nt.name))
         self.symbols = self.nonterms + self.terminals
+        self.skipped_domains = []
 
         self.__build_first_sets()
         self.table = ParsingTable(self)
@@ -436,15 +517,16 @@ class EDSL_Parser(object):
     def __str__(self):
         return self.stringify()
 
+    def add_skipped_domain(self, regex):
+        self.skipped_domains.append(regex)
+
     def parse(self, text):
-        lexer = Lexer(self.terminals, text)
+        lexer = Lexer(self.terminals, text, self.skipped_domains)
         stack = [(0, None)]
         cur = lexer.next_token()
         while True:
             cur_state, top_attr = stack[-1]
-            actions = list(self.table.action[cur_state][cur.type])
-            if actions == []:
-                raise Exception(cur_state, cur.type)
+            actions = list(self.table.action[cur_state][cur.type]) or [ERROR]
             action = actions[0]
             if isinstance(action, Shift):
                 stack.append((action.state, cur.attr))
@@ -459,6 +541,22 @@ class EDSL_Parser(object):
             elif isinstance(action, Accept):
                 assert(len(stack) == 2)
                 return top_attr
+            else:
+                assert action == ERROR
+                expected = [symbol for symbol, actions
+                            in self.table.action[cur_state].items()
+                            if len(actions) > 0]
+                raise ParseError(pos=cur.pos.start, unexpected=cur,
+                                 expected=expected)
+
+    def get_tokens(self, text):
+        lexer = Lexer(self.terminals, text, self.skipped_domains)
+
+        while True:
+            token = lexer.next_token()
+            yield token
+            if token.type == EOF_SYMBOL:
+                break
 
 
 def goto(gr, item_set, inp):
@@ -591,25 +689,43 @@ class LR0_Automaton:
         return [LR0_Automaton.__kernels(st) for st in self.states]
 
 
+class LexerError(Error):
+    ERROR_SLICE = 10
+
+    def __init__(self, pos, text):
+        self.pos = pos
+        self.bad = text[pos.offset:pos.offset + self.ERROR_SLICE]
+
+    def __repr__(self):
+        return f'LexerError({self.pos!r},{self.bad!r})'
+
+    def message(self):
+        return f'Не удалось разобрать {self.bad!r}'
+
+
 class Lexer:
-    def __init__(self, domains, text):
-        self.domains = domains
+    def __init__(self, domains, text, skip):
+        self.domains = list(domains)
         self.text = text
-        self.pos = 0
+        self.pos = Position()
+        self.skip_token = object()
+        self.domains += [Terminal('-skip-', regex, lambda _: self.skip_token)
+                         for regex in skip]
 
     def next_token(self):
-        while self.pos < len(self.text) and self.text[self.pos].isspace():
-            self.pos += 1
+        while self.pos.offset < len(self.text):
+            offset = self.pos.offset
+            matches = [(d, *d.match(self.text, offset)) for d in self.domains]
+            domain, length, attr = max(matches, key=lambda t: t[1])
 
-        if self.pos == len(self.text):
-            return Token(EOF_SYMBOL, self.pos, None)
+            if length > 0:
+                new_pos = self.pos.shift(self.text[offset:offset + length])
+                frag = Fragment(self.pos, new_pos)
+                self.pos = new_pos
+                if attr != self.skip_token:
+                    token = Token(domain, frag, attr)
+                    return token
+            else:
+                raise LexerError(self.pos, self.text)
 
-        matches = [(d, *d.match(self.text, self.pos)) for d in self.domains]
-        domain, length, attr = max(matches, key=lambda t: t[1])
-
-        if length > 0:
-            token = Token(domain, self.pos, attr)
-            self.pos += length
-            return token
-        else:
-            raise RuntimeError('lexer error')
+        return Token(EOF_SYMBOL, Fragment(self.pos, self.pos), None)
