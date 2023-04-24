@@ -1,5 +1,15 @@
+import math
 import re
 from parser_edsl import *
+
+
+# Словарь констант (понадобится в примере)
+CONSTANTS = {
+    'pi': math.pi,
+    'e': math.e,
+    'Na': 6.02214076e23, # Постоянная Больцмана
+    'kB': 1.380649e-23, # Число Авогадро
+}
 
 
 # ZeroDiv и checked_div нужны для примера учёта координат в действиях
@@ -38,6 +48,7 @@ real = Terminal('REAL', '[0-9]+(\\.[0-9]*)?([eE][-+]?[0-9]+)?', float)
 # Ключевое слово без учёта регистра (тоже повышаем приоритет)
 kw_mod = Terminal('MOD', 'mod', lambda x: None,
                   re_flags=re.IGNORECASE, priority=10)
+const = Terminal('CONST', '[A-Za-z]+', str)
 
 # Определение правил грамматики
 Expr |= Expr, '+', Term, lambda x, y: x + y
@@ -49,6 +60,7 @@ Term |= Term, kw_mod, Factor, lambda x, y: x % y
 Term |= Factor
 Factor |= integer
 Factor |= real
+Factor |= const, lambda name: CONSTANTS[name]
 Factor |= '(', Expr, ')'
 
 # Создаём парсер и проверяем грамматику на LALR(1)
@@ -83,6 +95,8 @@ test('1e+2 + 1e-2')
 test('100 mod 7')
 test('100 Mod 7')
 test('100 MOD 7')
+test('pi + e')
+test('kB * Na')
 
 title('Примеры синтаксических и лексических ошибок:')
 test('2 + 3.5*4/(76-6)+')
