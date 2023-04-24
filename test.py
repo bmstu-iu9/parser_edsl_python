@@ -137,6 +137,7 @@ title('Работа с пустой грамматикой:')
 Empty = NonTerminal('Empty')
 Empty |= ()
 parser_empty = Parser(Empty)
+assert parser_empty.is_lalr_one()
 print(parser_empty.parse(''))
 
 try:
