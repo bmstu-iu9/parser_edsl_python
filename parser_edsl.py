@@ -7,6 +7,7 @@ import sys
 
 __all__ = '''
 Terminal
+ExAction
 NonTerminal
 EOF_SYMBOL
 Position
@@ -87,6 +88,18 @@ EOF_SYMBOL = SpecTerminal('EOF')
 FREE_SYMBOL = SpecTerminal('#')
 
 
+@dataclasses.dataclass(frozen = True)
+class ExAction():
+    callee : object
+
+    @staticmethod
+    def wrap_simple_action(simple_fold):
+        def extended_action(attrs, coords, res_coord):
+            return simple_fold(*attrs)
+
+        return ExAction(extended_action)
+
+
 class NonTerminal(Symbol):
     def __init__(self, name):
         self.name = name
@@ -125,15 +138,18 @@ class NonTerminal(Symbol):
 
     def __ior__(self, other):
         is_callable = lambda obj: hasattr(obj, '__call__')
+        is_fold = lambda obj: is_callable(obj) or isinstance(obj, ExAction)
 
-        if isinstance(other, tuple) and is_callable(other[-1]):
+        if isinstance(other, tuple) and isinstance(other[-1], ExAction):
             *symbols, fold = other
             symbols = [self.__wrap_literals(sym) for sym in symbols]
             self.productions.append(symbols)
             self.lambdas.append(fold)
+        elif isinstance(other, tuple) and is_callable(other[-1]):
+            self |= other[:-1] + (ExAction.wrap_simple_action(other[-1]),)
         elif isinstance(other, tuple):
             self |= other + (self.__default_fold,)
-        elif isinstance(other, Symbol) or is_callable(other):
+        elif isinstance(other, Symbol) or is_fold(other):
             self |= (other,)
         elif isinstance(other, str):
             self |= (LiteralTerminal(other),)
@@ -525,22 +541,29 @@ class Parser(object):
 
     def parse(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
-        stack = [(0, None)]
+        stack = [(0, Fragment(Position(), Position()), None)]
         cur = lexer.next_token()
         while True:
-            cur_state, top_attr = stack[-1]
+            cur_state, cur_coord, top_attr = stack[-1]
             action = next(iter(self.table.action[cur_state][cur.type]), None)
             match action:
                 case Shift(state):
-                    stack.append((state, cur.attr))
+                    stack.append((state, cur.pos, cur.attr))
                     cur = lexer.next_token()
                 case Reduce(rule):
-                    nt, prod, lambda_func = self.productions[rule]
+                    nt, prod, fold = self.productions[rule]
                     n = len(prod)
-                    attrs = [attr for state, attr in stack[-n:] if attr != None]
+                    attrs = [attr for state, coord, attr in stack[-n:]
+                             if attr != None]
+                    coords = [coord for state, coord, attr in stack[-n:]]
+                    if len(coords) > 0:
+                        res_coord = Fragment(coords[0].start, coords[-1].following)
+                    else:
+                        res_coord = Fragment(cur.pos.start, cur.pos.start)
                     del stack[-n:]
                     goto_state = self.table.goto[stack[-1][0]][nt]
-                    stack.append((goto_state, lambda_func(*attrs)))
+                    res_attr = fold.callee(attrs, coords, res_coord)
+                    stack.append((goto_state, res_coord, res_attr))
                 case Accept():
                     assert(len(stack) == 2)
                     return top_attr

@@ -1,6 +1,26 @@
 import re
 from parser_edsl import *
 
+
+class ZeroDiv(Error):
+    def __init__(self, pos):
+        self.pos = pos
+
+    @property
+    def message(self):
+        return 'Деление на нуль (или ноль)'
+
+
+def checked_div(values, coords, res_coord):
+    x, y = values
+    cx, cdiv, cy = coords
+
+    if y != 0:
+        return x / y
+    else:
+        raise ZeroDiv(cy)
+
+
 E, T, F = map(NonTerminal, 'ETF')
 integer = Terminal('INTEGER', '[0-9]+', int, priority=7)
 real = Terminal('REAL', '[0-9]+(\\.[0-9]*)?([eE][-+]?[0-9]+)?', float)
@@ -10,7 +30,7 @@ E |= E, '+', T, lambda x, y: x + y
 E |= E, '-', T, lambda x, y: x - y
 E |= T
 T |= T, '*', F, lambda x, y: x * y
-T |= T, '/', F, lambda x, y: x / y
+T |= T, '/', F, ExAction(checked_div)
 T |= T, kw_mod, F, lambda x, y: x % y
 T |= F
 F |= integer
@@ -54,6 +74,7 @@ test('''
 *(5@6)
 '''.strip())
 test('')
+test('2 + 3.5*4/(76-76)')
 
 title('Токены:')
 for token in p.get_tokens('3e8+{комментарий}*\n(  /-100500mod100.500)'):
