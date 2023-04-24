@@ -212,7 +212,6 @@ class LrZeroItemTableEntry:
 Shift = collections.namedtuple('Shift', 'state')
 Reduce = collections.namedtuple('Reduce', 'rule')
 Accept = collections.namedtuple('Accept', '')
-ERROR = object()
 
 
 class ParsingTable:
@@ -530,8 +529,7 @@ class Parser(object):
         cur = lexer.next_token()
         while True:
             cur_state, top_attr = stack[-1]
-            actions = list(self.table.action[cur_state][cur.type]) or [ERROR]
-            action = actions[0]
+            action = next(iter(self.table.action[cur_state][cur.type]), None)
             match action:
                 case Shift(state):
                     stack.append((state, cur.attr))
@@ -546,8 +544,7 @@ class Parser(object):
                 case Accept():
                     assert(len(stack) == 2)
                     return top_attr
-                case _:
-                    assert action == ERROR
+                case None:
                     expected = [symbol for symbol, actions
                                 in self.table.action[cur_state].items()
                                 if len(actions) > 0]
