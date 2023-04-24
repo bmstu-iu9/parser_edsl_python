@@ -8,7 +8,7 @@ T |= T, '*', F, lambda x, y: x * y
 T |= F
 F |= number
 F |= '(', E, ')'
-p = EDSL_Parser(E)
+p = Parser(E)
 p.add_skipped_domain('\\s')
 p.add_skipped_domain('\\{.*?\\}')
 

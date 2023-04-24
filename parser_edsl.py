@@ -10,7 +10,7 @@ NonTerminal
 EOF_SYMBOL
 Position
 Fragment
-EDSL_Parser
+Parser
 Error
 '''.split()
 
@@ -426,7 +426,7 @@ class ParseError(Error):
                 + f'ожидалось {expected}'
 
 
-class EDSL_Parser(object):
+class Parser(object):
     def __init__(self, start_nonterminal):
         fake_axiom = NonTerminal(START_SYMBOL)
         fake_axiom |= start_nonterminal
