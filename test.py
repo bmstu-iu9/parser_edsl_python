@@ -111,7 +111,7 @@ test('')
 test('2 + 3.5*4/(76-76)')
 
 title('Токены:')
-for token in p.get_tokens('3e8+{комментарий}*\n(  /-100500mod100.500)'):
+for token in p.tokenize('3e8+{комментарий}*\n(  /-100500mod100.500)'):
     print(token.pos, ':', token)
 
 

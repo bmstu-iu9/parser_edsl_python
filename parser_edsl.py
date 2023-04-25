@@ -585,7 +585,7 @@ class Parser(object):
                     raise ParseError(pos=cur.pos.start, unexpected=cur,
                                      expected=expected)
 
-    def get_tokens(self, text):
+    def tokenize(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
 
         while True:
