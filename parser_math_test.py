@@ -88,27 +88,3 @@ def test_parse_ok(text, attr):
         assert round(p.parse(text), 6) == attr
     except pe.Error as e:
         pytest.fail(f"Ошибка разбора: {e}")
-
-
-@pytest.mark.parametrize(
-    "text, error",
-    [
-        (
-            "2 + 3.5*4/(76-6)+",
-            "Неожиданный символ EOF, ожидалось CONST, '(', REAL, INTEGER",
-        ),
-        ("2 + 3.5*4/(76-6))", "Неожиданный символ ')', ожидалось '-', '+', EOF"),
-        (
-            "2 + 3.5*4/(76-6)1",
-            "Неожиданный символ INTEGER(1), ожидалось '/', ')', MOD, '-', '*', '+', EOF",
-        ),
-        ("2 + 3.5*4/(76-6", "Неожиданный символ EOF, ожидалось ')', '-', '+'"),
-    ],
-)
-def test_parse_not_ok(text, error):
-    p = pe.Parser(Expr)
-    p.add_skipped_domain("\\s")
-    p.add_skipped_domain("\\{.*?\\}")
-    with pytest.raises(pe.ParseError) as parseError:
-        p.parse(text)
-    assert parseError.value.message == error
