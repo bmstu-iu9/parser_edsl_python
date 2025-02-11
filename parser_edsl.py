@@ -14,7 +14,37 @@ Position
 Fragment
 Parser
 Error
+Left
+Right
+NonAssoc
 '''.split()
+
+
+@dataclasses.dataclass(frozen=True)
+class Precedence:
+    level: int
+    associativity: str
+
+    def __repr__(self):
+        return f"Precedence({self.associativity!r}, {self.level!r})"
+
+
+@dataclasses.dataclass(frozen=True)
+class Left(Precedence):
+    level: int
+    associativity: str = 'left'
+
+
+@dataclasses.dataclass(frozen=True)
+class Right(Precedence):
+    level: int
+    associativity: str = 'right'
+
+
+@dataclasses.dataclass(frozen=True)
+class NonAssoc(Precedence):
+    level: int
+    associativity: str = 'nonassoc'
 
 
 class Symbol:
@@ -98,7 +128,7 @@ class ErrorTerminal(BaseTerminal):
 
 
 @dataclasses.dataclass(frozen = True)
-class ExAction():
+class ExAction:
     callee : object
 
     @staticmethod
@@ -114,6 +144,7 @@ class NonTerminal(Symbol):
         self.name = name
         self.productions = []
         self.lambdas = []
+        self.precedence_info = []
 
     def __repr__(self):
         return 'NonTerminal(' + repr(self.name) + ')'
@@ -148,18 +179,33 @@ class NonTerminal(Symbol):
     def __ior__(self, other):
         is_callable = lambda obj: hasattr(obj, '__call__')
         is_fold = lambda obj: is_callable(obj) or isinstance(obj, ExAction)
+        is_precedence = lambda obj: isinstance(obj, Precedence)
 
         if other == ():
             self |= lambda: None
-        elif isinstance(other, tuple) and isinstance(other[-1], ExAction):
-            *symbols, fold = other
+        elif isinstance(other, tuple) and len(other) >= 2 and is_precedence(other[-2]):
+            # if precedence rule
+            *symbols, prec, fold = other
             symbols = [self.__wrap_literals(sym) for sym in symbols]
+            symbols[1].priority = prec.level
+            if callable(fold):
+                fold = ExAction.wrap_simple_action(fold)
+
             self.productions.append(symbols)
             self.lambdas.append(fold)
-        elif isinstance(other, tuple) and is_callable(other[-1]):
-            self |= other[:-1] + (ExAction.wrap_simple_action(other[-1]),)
+            self.precedence_info.append(prec)
+        elif isinstance(other, tuple) and (isinstance(other[-1], ExAction)
+                  or (callable(other[-1]) and not isinstance(other[-1], Precedence))):
+            *symbols, fold = other
+            symbols = [self.__wrap_literals(sym) for sym in symbols]
+            if callable(fold):
+                fold = ExAction.wrap_simple_action(fold)
+
+            self.productions.append(symbols)
+            self.lambdas.append(fold)
+            self.precedence_info.append(None)
         elif isinstance(other, tuple):
-            self |= other + (self.__default_fold,)
+                self |= other + (self.__default_fold,)
         elif isinstance(other, Symbol) or is_fold(other):
             self |= (other,)
         elif isinstance(other, str):
@@ -178,7 +224,9 @@ class NonTerminal(Symbol):
         else:
             raise RuntimeError('__default_fold', args)
 
-    def enum_rules(self):
+    def enum_rules(self, include_precedence = True):
+        if include_precedence:
+            return zip(self.productions, self.lambdas, self.precedence_info)
         return zip(self.productions, self.lambdas)
 
 
@@ -280,7 +328,7 @@ class ParsingTable:
         for state_id in range(self.n_states):
             for item, next_symbol in self.__ccol[state_id]:
                 prod_index, dot = item
-                pname, pbody, plambda = gr.productions[prod_index]
+                _, pbody, _, _ = gr.productions[prod_index]
 
                 if dot < len(pbody):
                     terminal = pbody[dot]
@@ -312,7 +360,7 @@ class ParsingTable:
 
     def __stringify_lr_zero_item(self, item):
         prod_index, dot = item
-        pname, pbody, plambda = self.grammar.productions[prod_index]
+        pname, pbody, _, _ = self.grammar.productions[prod_index]
         dotted_pbody = pbody[:dot] + ['.'] + pbody[dot:]
         dotted_pbody_str = ' '.join(str(x) for x in dotted_pbody)
         return RULE_INDEXING_PATTERN % (prod_index, pname.name + ': ' + dotted_pbody_str)
@@ -379,7 +427,7 @@ def get_canonical_collection(gr):
                 # For each item in closure_set whose . (dot) points to a symbol equal to 'sym'
                 # i.e. a production expecting to see 'sym' next
                 for ((prod_index, dot), next_symbol) in closure_set:
-                    pname, pbody, plambda = gr.productions[prod_index]
+                    _, pbody, _, _ = gr.productions[prod_index]
                     if dot == len(pbody) or pbody[dot] != sym:
                         continue
 
@@ -420,7 +468,7 @@ def closure(gr, item_set):
     while len(current) > 0:
         new_elements = []
         for ((prod_index, dot), lookahead) in current:
-            pname, pbody, plambda = gr.productions[prod_index]
+            _, pbody, _, _ = gr.productions[prod_index]
             if dot == len(pbody) or pbody[dot] not in gr.nonterms:
                 continue
             nt = pbody[dot]
@@ -488,10 +536,10 @@ class Parser(object):
                 nt = self.nonterms[nt_idx]
                 self.nonterm_offset[nt] = len(self.productions)
 
-                for prod, func in nt.enum_rules():
+                for prod, func, prec in nt.enum_rules():
                     for symbol in prod:
                         register(symbol)
-                    self.productions.append((nt, prod, func))
+                    self.productions.append((nt, prod, func, prec))
 
             scanned_count = last_unscanned
 
@@ -527,7 +575,7 @@ class Parser(object):
         while repeat:
             repeat = False
 
-            for nt, prod, func in self.productions:
+            for nt, prod, _, _ in self.productions:
                 curfs = self.__first_sets[nt]
                 curfs_len = len(curfs)
                 curfs.update(self.first_set(prod))
@@ -556,13 +604,49 @@ class Parser(object):
         cur = lexer.next_token()
         while True:
             cur_state, cur_coord, top_attr = stack[-1]
-            action = next(iter(self.table.action[cur_state][cur.type]), None)
+            actions = self.table.action[cur_state][cur.type]
+            if len(actions) < 2:
+                action = next(iter(actions), None)
+            elif len(actions) == 2:
+                # Shift/reduce conflict: resolve via precedence
+                shift_action = None
+                reduce_action = None
+                for act in actions:
+                    if isinstance(act, Shift):
+                        shift_action = act
+                    elif isinstance(act, Reduce):
+                        reduce_action = act
+                if shift_action is not None and reduce_action is not None:
+                    _, _, fold, prod_prec = self.productions[reduce_action.rule]
+                    if prod_prec is None:
+                        prod = self.productions[reduce_action.rule][1]
+                        for sym in reversed(prod):
+                            if isinstance(sym, BaseTerminal):
+                                prod_prec = Precedence(sym.priority, 'left')
+                                break
+                    token_prec = cur.type.priority
+                    if prod_prec is None:
+                        action = shift_action
+                    elif token_prec > prod_prec.level:
+                        action = shift_action
+                    elif token_prec < prod_prec.level:
+                        action = reduce_action
+                    else:
+                        if prod_prec.associativity == 'left':
+                            action = reduce_action
+                        elif prod_prec.associativity == 'right':
+                            action = shift_action
+                        else:
+                            raise ParseError(pos=cur.pos.start, unexpected=cur, expected=[cur.type]) # TODO: CONFLICT ERROR might be usefull
+                else:
+                    action = shift_action or reduce_action
+
             match action:
                 case Shift(state):
                     stack.append((state, cur.pos, cur.attr))
                     cur = lexer.next_token()
                 case Reduce(rule):
-                    nt, prod, fold = self.productions[rule]
+                    nt, prod, fold, _ = self.productions[rule]
                     n = len(prod)
                     attrs = [attr for state, coord, attr in stack[len(stack)-n:]
                              if attr != None]
@@ -605,7 +689,7 @@ def goto(gr, item_set, inp):
     result_set = set()
     for (item, lookahead) in item_set:
         prod_id, dot = item
-        pname, pbody, plambda = gr.productions[prod_id]
+        _, pbody, _, _ = gr.productions[prod_id]
         if dot == len(pbody) or pbody[dot] != inp:
             continue
 
@@ -698,7 +782,7 @@ class LR0_Automaton:
         while len(set_queue) > 0:
             new_elements = []
             for itemProdId, dot in set_queue:
-                pname, pbody, plambda = gr.productions[itemProdId]
+                _, pbody, _, _ = gr.productions[itemProdId]
                 if dot == len(pbody) or pbody[dot] not in gr.nonterms:
                     continue
                 nt = pbody[dot]
@@ -716,7 +800,7 @@ class LR0_Automaton:
     def __goto(gr, item_set, inp):
         result_set = set()
         for prod_index, dot in item_set:
-            pname, pbody, plambda = gr.productions[prod_index]
+            _, pbody, _, _ = gr.productions[prod_index]
             if dot < len(pbody) and pbody[dot] == inp:
                 result_set.add((prod_index, dot + 1))
         result_set = LR0_Automaton.__closure(gr, result_set)
