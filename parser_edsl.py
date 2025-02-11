@@ -801,6 +801,14 @@ class Parser(object):
                     raise ParseError(pos=cur.pos.start, unexpected=cur,
                                      expected=expected)
 
+    def parse_earley(self, text):
+        tokens = list(self.tokenize(text))
+        tokens = [token for token in tokens if token.type != EOF_SYMBOL]
+        earley_parser = EarleyParser(self)
+        res = earley_parser.parse(tokens)
+
+        return res
+
     def parse_ll1(self, text):
         if not self.is_ll1():
             raise ValueError("Grammar is not LL(1); cannot parse in LL(1) mode.")
@@ -1104,3 +1112,143 @@ class Lexer:
                 return token
 
         return Token(EOF_SYMBOL, Fragment(self.pos, self.pos), None)
+
+@dataclasses.dataclass(frozen=True)
+class EarleyState:
+    rule: tuple
+    dot: int
+    start: int
+    end: int
+    attrs: tuple = ()
+    coords: tuple = ()
+
+    def __post_init__(self):
+        object.__setattr__(self, 'attrs', tuple(self.attrs))
+        object.__setattr__(self, 'coords', tuple(self.coords))
+
+    def __repr__(self):
+        lhs, rhs, _ = self.rule
+        dotted_rhs = ' '.join(str(x) for x in rhs[:self.dot]) + ' • ' + ' '.join(str(x) for x in rhs[self.dot:])
+        return f"{lhs} → {dotted_rhs} [{self.start}, {self.end}] {self.is_complete()} attr({self.attrs})"
+
+    def is_complete(self):
+        _, rhs, _ = self.rule
+        return self.dot == len(rhs)
+
+    def next_symbol(self):
+        _, rhs, _ = self.rule
+        if self.dot < len(rhs):
+            return rhs[self.dot]
+        return None
+
+
+class EarleyParser:
+    def __init__(self, grammar: Parser):
+        self.grammar = grammar
+        self.chart = collections.defaultdict(set)
+
+    def predict(self, state, pos, states):
+        next_sym = state.next_symbol()
+        if isinstance(next_sym, NonTerminal):
+            for prod, fold, _ in next_sym.enum_rules():
+                new_state = EarleyState((next_sym, tuple(prod), fold), 0, pos, pos)
+                if new_state not in self.chart[pos] and new_state not in states:
+                    states.append(new_state)
+                    self.predict(new_state, pos, states)
+
+    def scan(self, state, token, pos):
+        next_sym = state.next_symbol()
+        if (isinstance(next_sym, LiteralTerminal) or isinstance(next_sym, Terminal)) and next_sym == token.type:
+            # print(token.attr)
+            new_attrs = state.attrs + (token.attr,)
+            new_coords = state.coords + (token.pos,)
+            new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, new_attrs, new_coords)
+            self.chart[pos + 1].add(new_state)
+
+    def complete(self, state, pos, states: list[EarleyState]):
+        for prev_state in self.chart[state.start]:
+            next_sym = prev_state.next_symbol()
+            if next_sym == state.rule[0]:
+                state_attrs = state.attrs
+                new_attrs = prev_state.attrs + state_attrs
+                new_coords = prev_state.coords + state.coords
+                new_state = EarleyState(
+                    prev_state.rule,
+                    prev_state.dot + 1,
+                    prev_state.start,
+                    pos,
+                    new_attrs,
+                    new_coords
+                )
+                if new_state not in self.chart[pos]:
+                    states.append(new_state)
+                    if not new_state.is_complete():
+                        self.predict(new_state, pos, states)
+                if new_state.is_complete():
+                    _, _, fold = new_state.rule
+                    attrs = [attr for attr in tuple(new_state.attrs) if attr]
+                    coords = new_state.coords
+                    res_coord = Fragment(coords[0].start, coords[-1].following)
+
+                    res_attr = None
+
+                    # print("----")
+                    # print(self.chart[state.start])
+                    # print(prev_state)
+                    # print(state)
+                    # print(new_state)
+                    res_attr = fold.callee(attrs, coords, res_coord)
+                    # print(res_attr)
+                    if isinstance(res_attr, list):
+                        res_attr = tuple(res_attr)
+                    # print('a',res_attr)
+                        # print(new_state.rule, attrs, e)
+                    states.remove(new_state)
+                    new_state = dataclasses.replace(new_state, attrs=[res_attr], coords=[res_coord])
+                    states.append(new_state)
+
+
+    def parse(self, tokens):
+        start_rule = (self.grammar.nonterms[0], tuple(self.grammar.productions[0][1]), self.grammar.productions[0][2])
+        self.chart[0].add(EarleyState(start_rule, 0, 0, 0))
+
+        for pos in range(len(tokens)+1):
+            states = list(self.chart[pos])
+
+            for state in states:
+                if not state.is_complete():
+                    # print(state)
+                    next_sym = state.next_symbol()
+                    if isinstance(next_sym, NonTerminal):
+                        self.predict(state, pos, states)
+                    elif pos < len(tokens):
+                        self.scan(state, tokens[pos], pos)
+                else:
+                    self.complete(state, pos, states)
+            if len(states) == len(list(self.chart[pos])):
+                print(tokens[pos])
+                print(list(self.chart[pos-1])[0])
+                raise ParseError(tokens[pos].pos.start, unexpected=tokens[pos], expected=["+"])
+            self.chart[pos].update(states)
+
+        # print( self.chart[len(tokens)])
+        # print(self.grammar.nonterms)
+        # print(self.chart)
+        final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.nonterms[1] and state.is_complete() and state.start == 0]
+
+        # print(";;;;;")
+        # for state in final_states:
+        #     print(state)
+        # print(len(final_states))
+        if len(final_states) > 1:
+            # print(final_states)
+            raise RuntimeError(f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
+        if final_states:
+            return final_states[0].attrs[0]
+        return None
+
+    def print_chart(self):
+        for pos, states in sorted(self.chart.items()):
+            print(f"Chart[{pos}]:")
+            for state in states:
+                print(f"  {state}")
