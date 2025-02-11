@@ -530,6 +530,101 @@ class ParseError(Error):
                 + f'ожидалось {expected}'
 
 
+class PredictiveTableConflictError(Error):
+    def __init__(self, nonterm, terminal, existing_rule, new_rule):
+        self.nonterm = nonterm
+        self.terminal = terminal
+        self.existing_rule = existing_rule
+        self.new_rule = new_rule
+
+    @property
+    def message(self):
+        return (f'LL(1) conflict: для нетерминала {self.nonterm} и терминала {self.terminal}\n'
+                f'уже есть правило {self.existing_rule}, попытка добавить {self.new_rule}')
+
+
+@dataclasses.dataclass
+class ParseTreeNode:
+    symbol: Symbol
+    fold: ExAction = None
+    token: Token = None
+    children: list = dataclasses.field(default_factory=list)
+    attribute: object = None
+
+
+class PredictiveParsingTable:
+    def __init__(self, grammar):
+        self.grammar = grammar
+        self.table = {}
+
+        self.follow_sets = self._build_follow_sets()
+        self._build_table()
+
+    def _build_follow_sets(self):
+        follow = {nt: set() for nt in self.grammar.nonterms}
+        start_nt = self.grammar.nonterms[0]
+
+        follow[start_nt].add(EOF_SYMBOL)
+
+        changed = True
+        while changed:
+            changed = False
+            for (nt, prod, _, _) in self.grammar.productions:
+                for i, sym in enumerate(prod):
+                    if sym not in self.grammar.nonterms:
+                        continue
+                    beta = prod[i+1:]
+                    first_of_beta = self.grammar.first_set(beta)
+                    before_len = len(follow[sym])
+
+                    without_epsilon = set(first_of_beta) - {None}
+                    follow[sym].update(without_epsilon)
+
+                    if None in first_of_beta:
+                        follow[sym].update(follow[nt])
+
+                    after_len = len(follow[sym])
+                    if after_len > before_len:
+                        changed = True
+        return follow
+
+    def _build_table(self):
+        for nt in self.grammar.nonterms:
+            self.table[nt] = {}
+
+        for i, (nt, prod, fold, _) in enumerate(self.grammar.productions):
+            fs = self.grammar.first_set(prod)
+            non_epsilon = fs - {None}
+            for t in non_epsilon:
+                self._add_rule(nt, t, prod, fold)
+
+            if None in fs:
+                for t in self.follow_sets[nt]:
+                    self._add_rule(nt, t, prod, fold)
+
+    def _add_rule(self, nt, terminal, prod, fold):
+        if terminal not in self.table[nt]:
+            self.table[nt][terminal] = (prod, fold)
+        else:
+            existing = self.table[nt][terminal]
+            raise PredictiveTableConflictError(
+                nonterm=nt,
+                terminal=terminal,
+                existing_rule=existing,
+                new_rule=(prod, fold)
+            )
+
+    def stringify(self):
+        lines = []
+        for nt in self.grammar.nonterms:
+            row = self.table[nt]
+            lines.append(f'{nt}:')
+            for term, (alpha, fold) in row.items():
+                alpha_str = ' '.join(str(s) for s in alpha) if alpha else 'ε'
+                lines.append(f'   {term} -> {alpha_str}')
+        return '\n'.join(lines)
+
+
 class Parser(object):
     def __init__(self, start_nonterminal):
         fake_axiom = NonTerminal(START_SYMBOL)
@@ -576,6 +671,9 @@ class Parser(object):
 
         self.__build_first_sets()
         self.table = ParsingTable(self)
+
+        self.ll1_table = None
+        self.ll1_is_ok = True
 
     def first_set(self, x):
         result = set()
@@ -702,6 +800,116 @@ class Parser(object):
                                 if len(actions) > 0]
                     raise ParseError(pos=cur.pos.start, unexpected=cur,
                                      expected=expected)
+
+    def parse_ll1(self, text):
+        if not self.is_ll1():
+            raise ValueError("Grammar is not LL(1); cannot parse in LL(1) mode.")
+
+        lexer = Lexer(self.terminals, text, self.skipped_domains)
+
+        start_nt = self.nonterms[0]
+        root = ParseTreeNode(symbol=start_nt, fold=None)
+
+        stack = [ParseTreeNode(symbol=EOF_SYMBOL), root]
+
+        cur_token = lexer.next_token()
+
+        while True:
+            top_node = stack[-1]
+            top_sym = top_node.symbol
+
+            if isinstance(top_sym, BaseTerminal):
+                if top_sym == cur_token.type:
+                    top_node.token = cur_token
+                    stack.pop()
+                    if top_sym == EOF_SYMBOL:
+                        break
+                    cur_token = lexer.next_token()
+                else:
+                    expected = [top_sym]
+                    raise ParseError(pos=cur_token.pos.start,
+                                     unexpected=cur_token,
+                                     expected=expected)
+            else:
+                table_row = self.ll1_table.table[top_sym]
+                entry = table_row.get(cur_token.type, None)
+                if entry is None:
+                    expected = list(table_row.keys())
+                    raise ParseError(pos=cur_token.pos.start,
+                                     unexpected=cur_token,
+                                     expected=expected)
+
+                stack.pop()
+                prod_symbols, fold = entry
+                children_nodes = []
+                for sym in prod_symbols:
+                    child_node = ParseTreeNode(symbol=sym)
+                    children_nodes.append(child_node)
+                top_node.children = children_nodes
+                top_node.fold = fold
+
+                for child in reversed(children_nodes):
+                    stack.append(child)
+
+        # print(root)
+        self._evaluate_parse_tree(root)
+        return root.attribute
+
+    def build_ll1_table(self):
+        if self.ll1_table is not None:
+            return
+        try:
+            self.ll1_table = PredictiveParsingTable(self)
+        except PredictiveTableConflictError:
+            self.ll1_is_ok = False
+            raise
+
+    def is_ll1(self):
+        if self.ll1_table is None and self.ll1_is_ok:
+            try:
+                self.build_ll1_table()
+            except PredictiveTableConflictError:
+                return False
+        return self.ll1_is_ok
+
+    def stringify_ll1_table(self):
+        if not self.is_ll1():
+            return "Grammar is NOT LL(1) - conflicts found."
+        return self.ll1_table.stringify()
+
+    def _evaluate_parse_tree(self, node: ParseTreeNode):
+        if isinstance(node.symbol, BaseTerminal):
+            node.attribute = node.token.attr if node.token else None
+            return node.attribute
+
+        for child in node.children:
+            self._evaluate_parse_tree(child)
+        attrs = [child.attribute for child in node.children if child.attribute is not None]
+
+        coords = [child.token.pos for child in node.children if child.token is not None]
+        if len(coords) > 0:
+            res_coord = Fragment(coords[0].start, coords[-1].following)
+        else:
+            if node.children:
+                coords_for_start = [c for c in node.children if c.token is not None]
+                if coords_for_start:
+                    start = coords_for_start[0].start
+                else:
+                    start = Position()
+            else:
+                start = Position()
+            res_coord = Fragment(start, start)
+
+        if node.fold is not None:
+            node.attribute = node.fold.callee(attrs, coords, res_coord)
+        else:
+            if len(attrs) == 1:
+                node.attribute = attrs[0]
+            elif len(attrs) == 0:
+                node.attribute = None
+            else:
+                raise RuntimeError('No fold function for production with multiple children!')
+        return node.attribute
 
     def tokenize(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
