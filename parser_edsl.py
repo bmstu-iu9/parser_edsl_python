@@ -17,6 +17,7 @@ Error
 Left
 Right
 NonAssoc
+TokenAttributeError
 '''.split()
 
 
@@ -55,6 +56,13 @@ class BaseTerminal(Symbol):
     pass
 
 
+def pos_from_offset(text, offset):
+    line = text.count('\n', 0, offset) + 1
+    last_newline = text.rfind('\n', 0, offset)
+    col = offset - last_newline if last_newline != -1 else offset + 1
+    return Position(offset, line, col)
+
+
 class Terminal(BaseTerminal):
     def __init__(self, name, regex, func, *, priority=5, re_flags=re.MULTILINE):
         self.name = name
@@ -73,7 +81,10 @@ class Terminal(BaseTerminal):
         m = self.re.match(string, pos)
         if m != None:
             begin, end = m.span()
-            attrib = self.func(string[begin:end])
+            try:
+                attrib = self.func(string[begin:end])
+            except TokenAttributeError as exc:
+                raise LexerError(pos_from_offset(string, begin), string, message=exc.message) from exc
             return end - begin, attrib
         else:
             return 0, None
@@ -491,14 +502,29 @@ class Error(Exception, abc.ABC):
         pass
 
 
+class TokenAttributeError(Error):
+    def __init__(self, text):
+        self.bad = text
+
+    def __repr__(self):
+        return f'TokenAttributeError({self.pos!r},{self.bad!r})'
+
+    @property
+    def message(self):
+        return f'{self.bad}'
+
+
 @dataclasses.dataclass
 class ParseError(Error):
     pos : Position
     unexpected : Symbol
     expected : list
+    _text: str = ""
 
     @property
     def message(self):
+        if self._text != "":
+            return self._text
         expected = ', '.join(map(str, self.expected))
         return f'Неожиданный символ {self.unexpected}, ' \
                 + f'ожидалось {expected}'
@@ -601,7 +627,11 @@ class Parser(object):
     def parse(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
         stack = [(0, Fragment(Position(), Position()), None)]
-        cur = lexer.next_token()
+        try:
+            cur = lexer.next_token()
+        except LexerError as lex_err:
+            raise ParseError(pos=lex_err.pos, unexpected=lex_err, expected=[], _text=lex_err.message) from lex_err
+
         while True:
             cur_state, cur_coord, top_attr = stack[-1]
             actions = self.table.action[cur_state][cur.type]
@@ -644,7 +674,11 @@ class Parser(object):
             match action:
                 case Shift(state):
                     stack.append((state, cur.pos, cur.attr))
-                    cur = lexer.next_token()
+                    try:
+                        cur = lexer.next_token()
+                    except LexerError as lex_err:
+                        raise ParseError(pos=lex_err.pos, unexpected=lex_err, expected=[], _text=lex_err.message) from lex_err
+
                 case Reduce(rule):
                     nt, prod, fold, _ = self.productions[rule]
                     n = len(prod)
@@ -818,16 +852,17 @@ class LR0_Automaton:
 class LexerError(Error):
     ERROR_SLICE = 10
 
-    def __init__(self, pos, text):
+    def __init__(self, pos, text, message=""):
         self.pos = pos
         self.bad = text[pos.offset:pos.offset + self.ERROR_SLICE]
+        self._message = f'Не удалось разобрать {self.bad!r}' if message == "" else message
 
     def __repr__(self):
         return f'LexerError({self.pos!r},{self.bad!r})'
 
     @property
     def message(self):
-        return f'Не удалось разобрать {self.bad!r}'
+        return self._message
 
 
 class Lexer:
