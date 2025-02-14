@@ -627,8 +627,10 @@ class PredictiveParsingTable:
 
 class Parser(object):
     def __init__(self, start_nonterminal):
+
         fake_axiom = NonTerminal(START_SYMBOL)
         fake_axiom |= start_nonterminal
+        self.start = fake_axiom
 
         self.nonterms = []
         self.terminals = set()
@@ -1119,11 +1121,11 @@ class EarleyState:
     dot: int
     start: int
     end: int
-    attrs: tuple = ()
+    attrs: list = dataclasses.field(default_factory=list, hash=False)
     coords: tuple = ()
 
     def __post_init__(self):
-        object.__setattr__(self, 'attrs', tuple(self.attrs))
+        # object.__setattr__(self, 'attrs', tuple(self.attrs))
         object.__setattr__(self, 'coords', tuple(self.coords))
 
     def __repr__(self):
@@ -1151,7 +1153,7 @@ class EarleyParser:
         next_sym = state.next_symbol()
         if isinstance(next_sym, NonTerminal):
             for prod, fold, _ in next_sym.enum_rules():
-                new_state = EarleyState((next_sym, tuple(prod), fold), 0, pos, pos)
+                new_state = EarleyState((next_sym, tuple(prod), fold), 0, pos, pos, attrs=[])
                 if new_state not in self.chart[pos] and new_state not in states:
                     states.append(new_state)
                     self.predict(new_state, pos, states)
@@ -1159,10 +1161,24 @@ class EarleyParser:
     def scan(self, state, token, pos):
         next_sym = state.next_symbol()
         if (isinstance(next_sym, LiteralTerminal) or isinstance(next_sym, Terminal)) and next_sym == token.type:
-            # print(token.attr)
-            new_attrs = state.attrs + (token.attr,)
+            new_attrs = []
+            if token.attr is None:
+                new_attrs = state.attrs
+            elif state.attrs is not []:
+                new_attrs = state.attrs + [token.attr] if token.attr is not [] else state.attrs
+            else:
+                new_attrs = [token.attr] if len(token.attr) > 0 else []
+
             new_coords = state.coords + (token.pos,)
             new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, new_attrs, new_coords)
+            if new_state.is_complete():
+                _, _, fold = new_state.rule
+                coords = new_state.coords
+                res_coord = Fragment(coords[0].start, coords[-1].following)
+                res_attr = fold.callee(new_attrs, coords, res_coord)
+
+                new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, res_attr, new_coords)
+
             self.chart[pos + 1].add(new_state)
 
     def complete(self, state, pos, states: list[EarleyState]):
@@ -1170,7 +1186,13 @@ class EarleyParser:
             next_sym = prev_state.next_symbol()
             if next_sym == state.rule[0]:
                 state_attrs = state.attrs
-                new_attrs = prev_state.attrs + state_attrs
+                new_attrs = []
+
+                if len(prev_state.attrs) > 0:
+                    new_attrs = prev_state.attrs + [state_attrs] if not isinstance(state_attrs, list) or len(state_attrs) > 0 else prev_state.attrs
+                else:
+                    new_attrs = state_attrs
+
                 new_coords = prev_state.coords + state.coords
                 new_state = EarleyState(
                     prev_state.rule,
@@ -1186,23 +1208,17 @@ class EarleyParser:
                         self.predict(new_state, pos, states)
                 if new_state.is_complete():
                     _, _, fold = new_state.rule
-                    attrs = [attr for attr in tuple(new_state.attrs) if attr]
+                    if new_state.attrs is not None:
+                        if isinstance(new_state.attrs, list):
+                            attrs = [attr for attr in list(new_state.attrs) if attr]
+                        else:
+                            attrs = [new_state.attrs]
                     coords = new_state.coords
                     res_coord = Fragment(coords[0].start, coords[-1].following)
 
-                    res_attr = None
+                    res_attr = []
 
-                    # print("----")
-                    # print(self.chart[state.start])
-                    # print(prev_state)
-                    # print(state)
-                    # print(new_state)
                     res_attr = fold.callee(attrs, coords, res_coord)
-                    # print(res_attr)
-                    if isinstance(res_attr, list):
-                        res_attr = tuple(res_attr)
-                    # print('a',res_attr)
-                        # print(new_state.rule, attrs, e)
                     states.remove(new_state)
                     new_state = dataclasses.replace(new_state, attrs=[res_attr], coords=[res_coord])
                     states.append(new_state)
@@ -1239,7 +1255,7 @@ class EarleyParser:
                     self.complete(state, pos, states)
             self.chart[pos].update(states)
 
-        final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.nonterms[1] and state.is_complete() and state.start == 0]
+        final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.start and state.is_complete() and state.start == 0]
 
         if len(final_states) > 1:
             raise ParseError(pos=Position(), expected="", unexpected="", _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
