@@ -166,8 +166,7 @@ def test_good_parse():
     p = pe.Parser(NProgram)
     p.add_skipped_domain('\\s')
     p.add_skipped_domain('(\\(\\*|\\{).*?(\\*\\)|\\})')
-    assert p.is_ll1()
-    assert p.parse_ll1(good_text) == Program(var_defs=[VarDef(name='X', type=Type.Integer)], statements=[AssignStatement(variable='X', expr=ConstExpr(value=100, type=Type.Integer))])
+    assert p.parse_earley(good_text) == Program(var_defs=[VarDef(name='X', type=Type.Integer)], statements=[AssignStatement(variable='X', expr=ConstExpr(value=100, type=Type.Integer))])
 
 def test_bad_parse():
     p = pe.Parser(NProgram)
@@ -176,6 +175,6 @@ def test_bad_parse():
     assert p.is_ll1()
 
     with pytest.raises(pe.ParseError) as parse_error:
-        p.parse_ll1(bad_text)
+        p.parse_earley(bad_text)
 
     assert parse_error.value.message == "Неожиданный символ VARNAME(Y), ожидалось begin"
