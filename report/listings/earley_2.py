@@ -11,7 +11,8 @@ class EarleyParser:
             for prod, fold in next_sym.enum_rules():
                 new_state = EarleyState((next_sym, tuple(prod), fold),
                      0, pos, pos)
-                if new_state not in self.chart[pos] and new_state not in states:
+                if new_state not in self.chart[pos] and new_state \
+                    not in states:
                     states.append(new_state)
                     self.predict(new_state, pos, states)
 

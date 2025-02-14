@@ -1,6 +1,7 @@
 def parse(self, tokens):
         start_rule = (self.grammar.nonterms[0],
-            tuple(self.grammar.productions[0][1]), self.grammar.productions[0][2])
+            tuple(self.grammar.productions[0][1]),
+                self.grammar.productions[0][2])
         self.chart[0].add(EarleyState(start_rule, 0, 0, 0))
         for pos in range(len(tokens)+1):
             states = list(self.chart[pos])
