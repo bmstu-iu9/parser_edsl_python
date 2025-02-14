@@ -21,5 +21,5 @@ def test_undefiened_grammar():
 
     parser = pe.Parser(expr)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(pe.ParseError):
         result = parser.parse_earley("42+3-5")
