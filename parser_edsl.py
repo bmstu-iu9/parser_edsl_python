@@ -765,7 +765,7 @@ class Parser(object):
                         elif prod_prec.associativity == 'right':
                             action = shift_action
                         else:
-                            raise ParseError(pos=cur.pos.start, unexpected=cur, expected=[cur.type]) # TODO: CONFLICT ERROR might be usefull
+                            raise ParseError(pos=cur.pos.start, unexpected=cur, expected=[cur.type], _text="Неассоциативная операция")
                 else:
                     action = shift_action or reduce_action
 
@@ -1215,9 +1215,21 @@ class EarleyParser:
         for pos in range(len(tokens)+1):
             states = list(self.chart[pos])
 
+            if len(states) == 0:
+                expected_set = set()
+                last_chart = self.chart[pos-1] if pos > 0 else self.chart[0]
+                for state in last_chart:
+                    next_sym = state.next_symbol()
+                    if next_sym is not None:
+                        if isinstance(next_sym, Terminal):
+                            expected_set.add(next_sym)
+                        elif isinstance(next_sym, NonTerminal):
+                            expected_set.update(self.grammar.first_set([next_sym]) - {None})
+                expected_list = list(expected_set)
+                raise ParseError(tokens[pos-1].pos.start, unexpected=tokens[pos-1], expected=expected_list)
+
             for state in states:
                 if not state.is_complete():
-                    # print(state)
                     next_sym = state.next_symbol()
                     if isinstance(next_sym, NonTerminal):
                         self.predict(state, pos, states)
@@ -1225,24 +1237,12 @@ class EarleyParser:
                         self.scan(state, tokens[pos], pos)
                 else:
                     self.complete(state, pos, states)
-            if len(states) == len(list(self.chart[pos])):
-                print(tokens[pos])
-                print(list(self.chart[pos-1])[0])
-                raise ParseError(tokens[pos].pos.start, unexpected=tokens[pos], expected=["+"])
             self.chart[pos].update(states)
 
-        # print( self.chart[len(tokens)])
-        # print(self.grammar.nonterms)
-        # print(self.chart)
         final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.nonterms[1] and state.is_complete() and state.start == 0]
 
-        # print(";;;;;")
-        # for state in final_states:
-        #     print(state)
-        # print(len(final_states))
         if len(final_states) > 1:
-            # print(final_states)
-            raise RuntimeError(f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
+            raise ParseError(pos=Position(), expected="", unexpected="", _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
         if final_states:
             return final_states[0].attrs[0]
         return None
