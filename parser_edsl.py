@@ -1121,7 +1121,7 @@ class EarleyState:
     dot: int
     start: int
     end: int
-    attrs: list = dataclasses.field(default_factory=list, hash=False)
+    attrs: any = dataclasses.field(default_factory=lambda: None, hash=False)
     coords: tuple = ()
 
     def __post_init__(self):
@@ -1181,15 +1181,20 @@ class EarleyParser:
 
             self.chart[pos + 1].add(new_state)
 
-    def complete(self, state, pos, states: list[EarleyState]):
+    def complete(self, state: EarleyState, pos, states: list[EarleyState]):
         for prev_state in self.chart[state.start]:
             next_sym = prev_state.next_symbol()
             if next_sym == state.rule[0]:
                 state_attrs = state.attrs
                 new_attrs = []
 
-                if not isinstance(state_attrs, list) or len(state_attrs) > 1:
-                    new_attrs = prev_state.attrs + [state_attrs]
+                if state.is_complete() and state.start == state.end:
+                    state_attrs = [state_attrs]
+
+                if prev_state.attrs is None:
+                    new_attrs = state_attrs
+                elif not isinstance(state_attrs, list) or len(state_attrs) > 1 or state.is_complete():
+                    new_attrs = prev_state.attrs + state_attrs
                 else:
                     new_attrs = prev_state.attrs + state_attrs
 
@@ -1208,11 +1213,12 @@ class EarleyParser:
                         self.predict(new_state, pos, states)
                 if new_state.is_complete():
                     _, _, fold = new_state.rule
-                    if new_state.attrs is not None:
-                        if isinstance(new_state.attrs, list):
-                            attrs = [attr for attr in list(new_state.attrs) if attr]
-                        else:
-                            attrs = [new_state.attrs]
+                    # if new_state.attrs is not None:
+                        # if isinstance(new_state.attrs, list):
+                        #     attrs = [attr for attr in list(new_state.attrs) if attr]
+                        # else:
+                        #     attrs = [new_state.attrs]
+                    attrs = new_state.attrs
                     coords = new_state.coords
                     res_coord = Fragment(coords[0].start, coords[-1].following)
 
@@ -1244,16 +1250,21 @@ class EarleyParser:
                 expected_list = list(expected_set)
                 raise ParseError(tokens[pos-1].pos.start, unexpected=tokens[pos-1], expected=expected_list)
 
-            for state in states:
+            i = 0
+            while i  < len(states):
+                state = states[i]
                 if not state.is_complete():
                     next_sym = state.next_symbol()
+                    # print(next_sym)
                     if isinstance(next_sym, NonTerminal):
+                        # print('a', next_sym)
                         self.predict(state, pos, states)
                     elif pos < len(tokens):
                         self.scan(state, tokens[pos], pos)
                 else:
                     self.complete(state, pos, states)
-            self.chart[pos].update(states)
+                i+=1
+                self.chart[pos].update(states)
 
         final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.start and state.is_complete() and state.start == 0]
         if len(final_states) > 1:
