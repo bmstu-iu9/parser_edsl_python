@@ -14,7 +14,38 @@ Position
 Fragment
 Parser
 Error
+Left
+Right
+NonAssoc
+TokenAttributeError
 '''.split()
+
+
+@dataclasses.dataclass(frozen=True)
+class Precedence:
+    level: int
+    associativity: str
+
+    def __repr__(self):
+        return f"Precedence({self.associativity!r}, {self.level!r})"
+
+
+@dataclasses.dataclass(frozen=True)
+class Left(Precedence):
+    level: int
+    associativity: str = 'left'
+
+
+@dataclasses.dataclass(frozen=True)
+class Right(Precedence):
+    level: int
+    associativity: str = 'right'
+
+
+@dataclasses.dataclass(frozen=True)
+class NonAssoc(Precedence):
+    level: int
+    associativity: str = 'nonassoc'
 
 
 class Symbol:
@@ -23,6 +54,13 @@ class Symbol:
 
 class BaseTerminal(Symbol):
     pass
+
+
+def pos_from_offset(text, offset):
+    line = text.count('\n', 0, offset) + 1
+    last_newline = text.rfind('\n', 0, offset)
+    col = offset - last_newline if last_newline != -1 else offset + 1
+    return Position(offset, line, col)
 
 
 class Terminal(BaseTerminal):
@@ -43,7 +81,10 @@ class Terminal(BaseTerminal):
         m = self.re.match(string, pos)
         if m != None:
             begin, end = m.span()
-            attrib = self.func(string[begin:end])
+            try:
+                attrib = self.func(string[begin:end])
+            except TokenAttributeError as exc:
+                raise LexerError(pos_from_offset(string, begin), string, message=exc.message) from exc
             return end - begin, attrib
         else:
             return 0, None
@@ -98,7 +139,7 @@ class ErrorTerminal(BaseTerminal):
 
 
 @dataclasses.dataclass(frozen = True)
-class ExAction():
+class ExAction:
     callee : object
 
     @staticmethod
@@ -114,6 +155,7 @@ class NonTerminal(Symbol):
         self.name = name
         self.productions = []
         self.lambdas = []
+        self.precedence_info = []
 
     def __repr__(self):
         return 'NonTerminal(' + repr(self.name) + ')'
@@ -148,18 +190,33 @@ class NonTerminal(Symbol):
     def __ior__(self, other):
         is_callable = lambda obj: hasattr(obj, '__call__')
         is_fold = lambda obj: is_callable(obj) or isinstance(obj, ExAction)
+        is_precedence = lambda obj: isinstance(obj, Precedence)
 
         if other == ():
             self |= lambda: None
-        elif isinstance(other, tuple) and isinstance(other[-1], ExAction):
-            *symbols, fold = other
+        elif isinstance(other, tuple) and len(other) >= 2 and is_precedence(other[-2]):
+            # if precedence rule
+            *symbols, prec, fold = other
             symbols = [self.__wrap_literals(sym) for sym in symbols]
+            symbols[1].priority = prec.level
+            if callable(fold):
+                fold = ExAction.wrap_simple_action(fold)
+
             self.productions.append(symbols)
             self.lambdas.append(fold)
-        elif isinstance(other, tuple) and is_callable(other[-1]):
-            self |= other[:-1] + (ExAction.wrap_simple_action(other[-1]),)
+            self.precedence_info.append(prec)
+        elif isinstance(other, tuple) and (isinstance(other[-1], ExAction)
+                  or (callable(other[-1]) and not isinstance(other[-1], Precedence))):
+            *symbols, fold = other
+            symbols = [self.__wrap_literals(sym) for sym in symbols]
+            if callable(fold):
+                fold = ExAction.wrap_simple_action(fold)
+
+            self.productions.append(symbols)
+            self.lambdas.append(fold)
+            self.precedence_info.append(None)
         elif isinstance(other, tuple):
-            self |= other + (self.__default_fold,)
+                self |= other + (self.__default_fold,)
         elif isinstance(other, Symbol) or is_fold(other):
             self |= (other,)
         elif isinstance(other, str):
@@ -178,7 +235,9 @@ class NonTerminal(Symbol):
         else:
             raise RuntimeError('__default_fold', args)
 
-    def enum_rules(self):
+    def enum_rules(self, include_precedence = True):
+        if include_precedence:
+            return zip(self.productions, self.lambdas, self.precedence_info)
         return zip(self.productions, self.lambdas)
 
 
@@ -280,7 +339,7 @@ class ParsingTable:
         for state_id in range(self.n_states):
             for item, next_symbol in self.__ccol[state_id]:
                 prod_index, dot = item
-                pname, pbody, plambda = gr.productions[prod_index]
+                _, pbody, _, _ = gr.productions[prod_index]
 
                 if dot < len(pbody):
                     terminal = pbody[dot]
@@ -312,7 +371,7 @@ class ParsingTable:
 
     def __stringify_lr_zero_item(self, item):
         prod_index, dot = item
-        pname, pbody, plambda = self.grammar.productions[prod_index]
+        pname, pbody, _, _ = self.grammar.productions[prod_index]
         dotted_pbody = pbody[:dot] + ['.'] + pbody[dot:]
         dotted_pbody_str = ' '.join(str(x) for x in dotted_pbody)
         return RULE_INDEXING_PATTERN % (prod_index, pname.name + ': ' + dotted_pbody_str)
@@ -379,7 +438,7 @@ def get_canonical_collection(gr):
                 # For each item in closure_set whose . (dot) points to a symbol equal to 'sym'
                 # i.e. a production expecting to see 'sym' next
                 for ((prod_index, dot), next_symbol) in closure_set:
-                    pname, pbody, plambda = gr.productions[prod_index]
+                    _, pbody, _, _ = gr.productions[prod_index]
                     if dot == len(pbody) or pbody[dot] != sym:
                         continue
 
@@ -420,7 +479,7 @@ def closure(gr, item_set):
     while len(current) > 0:
         new_elements = []
         for ((prod_index, dot), lookahead) in current:
-            pname, pbody, plambda = gr.productions[prod_index]
+            _, pbody, _, _ = gr.productions[prod_index]
             if dot == len(pbody) or pbody[dot] not in gr.nonterms:
                 continue
             nt = pbody[dot]
@@ -443,23 +502,135 @@ class Error(Exception, abc.ABC):
         pass
 
 
+class TokenAttributeError(Error):
+    def __init__(self, text):
+        self.bad = text
+
+    def __repr__(self):
+        return f'TokenAttributeError({self.pos!r},{self.bad!r})'
+
+    @property
+    def message(self):
+        return f'{self.bad}'
+
+
 @dataclasses.dataclass
 class ParseError(Error):
     pos : Position
     unexpected : Symbol
     expected : list
+    _text: str = ""
 
     @property
     def message(self):
+        if self._text != "":
+            return self._text
         expected = ', '.join(map(str, self.expected))
         return f'Неожиданный символ {self.unexpected}, ' \
                 + f'ожидалось {expected}'
 
 
+class PredictiveTableConflictError(Error):
+    def __init__(self, nonterm, terminal, existing_rule, new_rule):
+        self.nonterm = nonterm
+        self.terminal = terminal
+        self.existing_rule = existing_rule
+        self.new_rule = new_rule
+
+    @property
+    def message(self):
+        return (f'LL(1) conflict: для нетерминала {self.nonterm} и терминала {self.terminal}\n'
+                f'уже есть правило {self.existing_rule}, попытка добавить {self.new_rule}')
+
+
+@dataclasses.dataclass
+class ParseTreeNode:
+    symbol: Symbol
+    fold: ExAction = None
+    token: Token = None
+    children: list = dataclasses.field(default_factory=list)
+    attribute: object = None
+
+
+class PredictiveParsingTable:
+    def __init__(self, grammar):
+        self.grammar = grammar
+        self.table = {}
+
+        self.follow_sets = self._build_follow_sets()
+        self._build_table()
+
+    def _build_follow_sets(self):
+        follow = {nt: set() for nt in self.grammar.nonterms}
+        start_nt = self.grammar.nonterms[0]
+
+        follow[start_nt].add(EOF_SYMBOL)
+
+        changed = True
+        while changed:
+            changed = False
+            for (nt, prod, _, _) in self.grammar.productions:
+                for i, sym in enumerate(prod):
+                    if sym not in self.grammar.nonterms:
+                        continue
+                    beta = prod[i+1:]
+                    first_of_beta = self.grammar.first_set(beta)
+                    before_len = len(follow[sym])
+
+                    without_epsilon = set(first_of_beta) - {None}
+                    follow[sym].update(without_epsilon)
+
+                    if None in first_of_beta:
+                        follow[sym].update(follow[nt])
+
+                    after_len = len(follow[sym])
+                    if after_len > before_len:
+                        changed = True
+        return follow
+
+    def _build_table(self):
+        for nt in self.grammar.nonterms:
+            self.table[nt] = {}
+
+        for i, (nt, prod, fold, _) in enumerate(self.grammar.productions):
+            fs = self.grammar.first_set(prod)
+            non_epsilon = fs - {None}
+            for t in non_epsilon:
+                self._add_rule(nt, t, prod, fold)
+
+            if None in fs:
+                for t in self.follow_sets[nt]:
+                    self._add_rule(nt, t, prod, fold)
+
+    def _add_rule(self, nt, terminal, prod, fold):
+        if terminal not in self.table[nt]:
+            self.table[nt][terminal] = (prod, fold)
+        else:
+            existing = self.table[nt][terminal]
+            raise PredictiveTableConflictError(
+                nonterm=nt,
+                terminal=terminal,
+                existing_rule=existing,
+                new_rule=(prod, fold)
+            )
+
+    def stringify(self):
+        lines = []
+        for nt in self.grammar.nonterms:
+            row = self.table[nt]
+            lines.append(f'{nt}:')
+            for term, (alpha, fold) in row.items():
+                alpha_str = ' '.join(str(s) for s in alpha) if alpha else 'ε'
+                lines.append(f'   {term} -> {alpha_str}')
+        return '\n'.join(lines)
+
+
 class Parser(object):
     def __init__(self, start_nonterminal):
+
         fake_axiom = NonTerminal(START_SYMBOL)
         fake_axiom |= start_nonterminal
+        self.start = start_nonterminal
 
         self.nonterms = []
         self.terminals = set()
@@ -488,10 +659,10 @@ class Parser(object):
                 nt = self.nonterms[nt_idx]
                 self.nonterm_offset[nt] = len(self.productions)
 
-                for prod, func in nt.enum_rules():
+                for prod, func, prec in nt.enum_rules():
                     for symbol in prod:
                         register(symbol)
-                    self.productions.append((nt, prod, func))
+                    self.productions.append((nt, prod, func, prec))
 
             scanned_count = last_unscanned
 
@@ -502,6 +673,9 @@ class Parser(object):
 
         self.__build_first_sets()
         self.table = ParsingTable(self)
+
+        self.ll1_table = None
+        self.ll1_is_ok = True
 
     def first_set(self, x):
         result = set()
@@ -527,7 +701,7 @@ class Parser(object):
         while repeat:
             repeat = False
 
-            for nt, prod, func in self.productions:
+            for nt, prod, _, _ in self.productions:
                 curfs = self.__first_sets[nt]
                 curfs_len = len(curfs)
                 curfs.update(self.first_set(prod))
@@ -553,16 +727,60 @@ class Parser(object):
     def parse(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
         stack = [(0, Fragment(Position(), Position()), None)]
-        cur = lexer.next_token()
+        try:
+            cur = lexer.next_token()
+        except LexerError as lex_err:
+            raise ParseError(pos=lex_err.pos, unexpected=lex_err, expected=[], _text=lex_err.message) from lex_err
+
         while True:
             cur_state, cur_coord, top_attr = stack[-1]
-            action = next(iter(self.table.action[cur_state][cur.type]), None)
+            actions = self.table.action[cur_state][cur.type]
+            if len(actions) < 2:
+                action = next(iter(actions), None)
+            elif len(actions) == 2:
+                # Shift/reduce conflict: resolve via precedence
+                shift_action = None
+                reduce_action = None
+                for act in actions:
+                    if isinstance(act, Shift):
+                        shift_action = act
+                    elif isinstance(act, Reduce):
+                        reduce_action = act
+                if shift_action is not None and reduce_action is not None:
+                    _, _, fold, prod_prec = self.productions[reduce_action.rule]
+                    if prod_prec is None:
+                        prod = self.productions[reduce_action.rule][1]
+                        for sym in reversed(prod):
+                            if isinstance(sym, BaseTerminal):
+                                prod_prec = Precedence(sym.priority, 'left')
+                                break
+                    token_prec = cur.type.priority
+                    if prod_prec is None:
+                        action = shift_action
+                    elif token_prec > prod_prec.level:
+                        action = shift_action
+                    elif token_prec < prod_prec.level:
+                        action = reduce_action
+                    else:
+                        if prod_prec.associativity == 'left':
+                            action = reduce_action
+                        elif prod_prec.associativity == 'right':
+                            action = shift_action
+                        else:
+                            raise ParseError(pos=cur.pos.start, unexpected=cur, expected=[cur.type], _text="Неассоциативная операция")
+                else:
+                    action = shift_action or reduce_action
+
             match action:
                 case Shift(state):
                     stack.append((state, cur.pos, cur.attr))
-                    cur = lexer.next_token()
+                    try:
+                        cur = lexer.next_token()
+                    except LexerError as lex_err:
+                        raise ParseError(pos=lex_err.pos, unexpected=lex_err, expected=[], _text=lex_err.message) from lex_err
+
                 case Reduce(rule):
-                    nt, prod, fold = self.productions[rule]
+                    nt, prod, fold, _ = self.productions[rule]
                     n = len(prod)
                     attrs = [attr for state, coord, attr in stack[len(stack)-n:]
                              if attr != None]
@@ -585,6 +803,124 @@ class Parser(object):
                     raise ParseError(pos=cur.pos.start, unexpected=cur,
                                      expected=expected)
 
+    def parse_earley(self, text):
+        tokens = list(self.tokenize(text))
+        tokens = [token for token in tokens if token.type != EOF_SYMBOL]
+        earley_parser = EarleyParser(self)
+        res = earley_parser.parse(tokens)
+
+        return res
+
+    def parse_ll1(self, text):
+        if not self.is_ll1():
+            raise ValueError("Grammar is not LL(1); cannot parse in LL(1) mode.")
+
+        lexer = Lexer(self.terminals, text, self.skipped_domains)
+
+        start_nt = self.nonterms[0]
+        root = ParseTreeNode(symbol=start_nt, fold=None)
+
+        stack = [ParseTreeNode(symbol=EOF_SYMBOL), root]
+
+        cur_token = lexer.next_token()
+
+        while True:
+            top_node = stack[-1]
+            top_sym = top_node.symbol
+
+            if isinstance(top_sym, BaseTerminal):
+                if top_sym == cur_token.type:
+                    top_node.token = cur_token
+                    stack.pop()
+                    if top_sym == EOF_SYMBOL:
+                        break
+                    cur_token = lexer.next_token()
+                else:
+                    expected = [top_sym]
+                    raise ParseError(pos=cur_token.pos.start,
+                                     unexpected=cur_token,
+                                     expected=expected)
+            else:
+                table_row = self.ll1_table.table[top_sym]
+                entry = table_row.get(cur_token.type, None)
+                if entry is None:
+                    expected = list(table_row.keys())
+                    raise ParseError(pos=cur_token.pos.start,
+                                     unexpected=cur_token,
+                                     expected=expected)
+
+                stack.pop()
+                prod_symbols, fold = entry
+                children_nodes = []
+                for sym in prod_symbols:
+                    child_node = ParseTreeNode(symbol=sym)
+                    children_nodes.append(child_node)
+                top_node.children = children_nodes
+                top_node.fold = fold
+
+                for child in reversed(children_nodes):
+                    stack.append(child)
+
+        # print(root)
+        self._evaluate_parse_tree(root)
+        return root.attribute
+
+    def build_ll1_table(self):
+        if self.ll1_table is not None:
+            return
+        try:
+            self.ll1_table = PredictiveParsingTable(self)
+        except PredictiveTableConflictError:
+            self.ll1_is_ok = False
+            raise
+
+    def is_ll1(self):
+        if self.ll1_table is None and self.ll1_is_ok:
+            try:
+                self.build_ll1_table()
+            except PredictiveTableConflictError:
+                return False
+        return self.ll1_is_ok
+
+    def stringify_ll1_table(self):
+        if not self.is_ll1():
+            return "Grammar is NOT LL(1) - conflicts found."
+        return self.ll1_table.stringify()
+
+    def _evaluate_parse_tree(self, node: ParseTreeNode):
+        if isinstance(node.symbol, BaseTerminal):
+            node.attribute = node.token.attr if node.token else None
+            return node.attribute
+
+        for child in node.children:
+            self._evaluate_parse_tree(child)
+        attrs = [child.attribute for child in node.children if child.attribute is not None]
+
+        coords = [child.token.pos for child in node.children if child.token is not None]
+        if len(coords) > 0:
+            res_coord = Fragment(coords[0].start, coords[-1].following)
+        else:
+            if node.children:
+                coords_for_start = [c for c in node.children if c.token is not None]
+                if coords_for_start:
+                    start = coords_for_start[0].start
+                else:
+                    start = Position()
+            else:
+                start = Position()
+            res_coord = Fragment(start, start)
+
+        if node.fold is not None:
+            node.attribute = node.fold.callee(attrs, coords, res_coord)
+        else:
+            if len(attrs) == 1:
+                node.attribute = attrs[0]
+            elif len(attrs) == 0:
+                node.attribute = None
+            else:
+                raise RuntimeError('No fold function for production with multiple children!')
+        return node.attribute
+
     def tokenize(self, text):
         lexer = Lexer(self.terminals, text, self.skipped_domains)
 
@@ -605,7 +941,7 @@ def goto(gr, item_set, inp):
     result_set = set()
     for (item, lookahead) in item_set:
         prod_id, dot = item
-        pname, pbody, plambda = gr.productions[prod_id]
+        _, pbody, _, _ = gr.productions[prod_id]
         if dot == len(pbody) or pbody[dot] != inp:
             continue
 
@@ -698,7 +1034,7 @@ class LR0_Automaton:
         while len(set_queue) > 0:
             new_elements = []
             for itemProdId, dot in set_queue:
-                pname, pbody, plambda = gr.productions[itemProdId]
+                _, pbody, _, _ = gr.productions[itemProdId]
                 if dot == len(pbody) or pbody[dot] not in gr.nonterms:
                     continue
                 nt = pbody[dot]
@@ -716,7 +1052,7 @@ class LR0_Automaton:
     def __goto(gr, item_set, inp):
         result_set = set()
         for prod_index, dot in item_set:
-            pname, pbody, plambda = gr.productions[prod_index]
+            _, pbody, _, _ = gr.productions[prod_index]
             if dot < len(pbody) and pbody[dot] == inp:
                 result_set.add((prod_index, dot + 1))
         result_set = LR0_Automaton.__closure(gr, result_set)
@@ -734,16 +1070,17 @@ class LR0_Automaton:
 class LexerError(Error):
     ERROR_SLICE = 10
 
-    def __init__(self, pos, text):
+    def __init__(self, pos, text, message=""):
         self.pos = pos
         self.bad = text[pos.offset:pos.offset + self.ERROR_SLICE]
+        self._message = f'Не удалось разобрать {self.bad!r}' if message == "" else message
 
     def __repr__(self):
         return f'LexerError({self.pos!r},{self.bad!r})'
 
     @property
     def message(self):
-        return f'Не удалось разобрать {self.bad!r}'
+        return self._message
 
 
 class Lexer:
@@ -777,3 +1114,166 @@ class Lexer:
                 return token
 
         return Token(EOF_SYMBOL, Fragment(self.pos, self.pos), None)
+
+@dataclasses.dataclass(frozen=True)
+class EarleyState:
+    rule: tuple
+    dot: int
+    start: int
+    end: int
+    attrs: any = dataclasses.field(default_factory=lambda: None, hash=False)
+    coords: tuple = ()
+
+    def __post_init__(self):
+        object.__setattr__(self, 'coords', tuple(self.coords))
+
+    def __repr__(self):
+        lhs, rhs, _ = self.rule
+        dotted_rhs = ' '.join(str(x) for x in rhs[:self.dot]) + ' • ' + ' '.join(str(x) for x in rhs[self.dot:])
+        return f"{lhs} → {dotted_rhs} [{self.start}, {self.end}] {self.is_complete()} attr({self.attrs})"
+
+    def is_complete(self):
+        _, rhs, _ = self.rule
+        return self.dot == len(rhs)
+
+    def next_symbol(self):
+        _, rhs, _ = self.rule
+        if self.dot < len(rhs):
+            return rhs[self.dot]
+        return None
+
+
+class EarleyParser:
+    def __init__(self, grammar: Parser):
+        self.grammar = grammar
+        self.chart = collections.defaultdict(set)
+
+    def predict(self, state, pos, states):
+        next_sym = state.next_symbol()
+        if isinstance(next_sym, NonTerminal):
+            for prod, fold, _ in next_sym.enum_rules():
+                new_state = EarleyState((next_sym, tuple(prod), fold), 0, pos, pos, attrs=[])
+                if new_state not in self.chart[pos] and new_state not in states:
+                    states.append(new_state)
+                    self.predict(new_state, pos, states)
+
+    def scan(self, state, token, pos):
+        next_sym = state.next_symbol()
+        if (isinstance(next_sym, LiteralTerminal) or isinstance(next_sym, Terminal)) and next_sym == token.type:
+            new_attrs = []
+
+            if token.attr is None:
+                new_attrs = state.attrs
+            elif not isinstance(state, list) or len(token.attr) > 1:
+                new_attrs = state.attrs + [token.attr]
+            else:
+                 new_attrs = state.attrs + token.attr
+
+            new_coords = state.coords + (token.pos,)
+            new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, new_attrs, new_coords)
+            if new_state.is_complete():
+                _, _, fold = new_state.rule
+                coords = new_state.coords
+                res_coord = Fragment(coords[0].start, coords[-1].following)
+                res_attr = fold.callee(new_attrs, coords, res_coord)
+
+                new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, [res_attr], new_coords)
+
+            self.chart[pos + 1].add(new_state)
+
+    def complete(self, state: EarleyState, pos, states: list[EarleyState]):
+        for prev_state in self.chart[state.start]:
+            next_sym = prev_state.next_symbol()
+            if next_sym == state.rule[0]:
+                state_attrs = state.attrs
+                new_attrs = []
+
+                if state.is_complete() and state.start == state.end:
+                    state_attrs = [state_attrs]
+
+                if prev_state.attrs is None:
+                    new_attrs = state_attrs
+                elif not isinstance(state_attrs, list) or len(state_attrs) > 1 or state.is_complete():
+                    new_attrs = prev_state.attrs + state_attrs
+                else:
+                    new_attrs = prev_state.attrs + state_attrs
+
+                new_coords = prev_state.coords + state.coords
+                new_state = EarleyState(
+                    prev_state.rule,
+                    prev_state.dot + 1,
+                    prev_state.start,
+                    pos,
+                    new_attrs,
+                    new_coords
+                )
+                if new_state not in self.chart[pos]:
+                    states.append(new_state)
+                    if not new_state.is_complete():
+                        self.predict(new_state, pos, states)
+                if new_state.is_complete():
+                    _, _, fold = new_state.rule
+                    # if new_state.attrs is not None:
+                        # if isinstance(new_state.attrs, list):
+                        #     attrs = [attr for attr in list(new_state.attrs) if attr]
+                        # else:
+                        #     attrs = [new_state.attrs]
+                    attrs = new_state.attrs
+                    coords = new_state.coords
+                    res_coord = Fragment(coords[0].start, coords[-1].following)
+
+                    res_attr = []
+
+                    res_attr = fold.callee(attrs, coords, res_coord)
+                    states.remove(new_state)
+                    new_state = dataclasses.replace(new_state, attrs=[res_attr], coords=[res_coord])
+                    states.append(new_state)
+
+
+    def parse(self, tokens):
+        start_rule = (self.grammar.nonterms[0], tuple(self.grammar.productions[0][1]), self.grammar.productions[0][2])
+        self.chart[0].add(EarleyState(start_rule, 0, 0, 0))
+
+        for pos in range(len(tokens)+1):
+            states = list(self.chart[pos])
+
+            if len(states) == 0:
+                expected_set = set()
+                last_chart = self.chart[pos-1] if pos > 0 else self.chart[0]
+                for state in last_chart:
+                    next_sym = state.next_symbol()
+                    if next_sym is not None:
+                        if isinstance(next_sym, Terminal):
+                            expected_set.add(next_sym)
+                        elif isinstance(next_sym, NonTerminal):
+                            expected_set.update(self.grammar.first_set([next_sym]) - {None})
+                expected_list = list(expected_set)
+                raise ParseError(tokens[pos-1].pos.start, unexpected=tokens[pos-1], expected=expected_list)
+
+            i = 0
+            while i  < len(states):
+                state = states[i]
+                if not state.is_complete():
+                    next_sym = state.next_symbol()
+                    # print(next_sym)
+                    if isinstance(next_sym, NonTerminal):
+                        # print('a', next_sym)
+                        self.predict(state, pos, states)
+                    elif pos < len(tokens):
+                        self.scan(state, tokens[pos], pos)
+                else:
+                    self.complete(state, pos, states)
+                i+=1
+                self.chart[pos].update(states)
+
+        final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.start and state.is_complete() and state.start == 0]
+        if len(final_states) > 1:
+            raise ParseError(pos=Position(), expected="", unexpected="", _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
+        if final_states:
+            return final_states[0].attrs[0]
+
+    def print_chart(self):
+        for pos, states in sorted(self.chart.items()):
+            print(f"Chart[{pos}]:")
+            for state in states:
+                print(f"  {state}")

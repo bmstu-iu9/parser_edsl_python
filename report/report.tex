@@ -1,0 +1,1466 @@
+% !TeX TXS-program:bibliography = txs:///biber
+\documentclass[14pt, russian]{scrartcl}
+\let\counterwithout\relax
+\let\counterwithin\relax
+%\usepackage{lmodern}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{extsizes}
+\usepackage{subfig}
+\usepackage[export]{adjustbox}
+\usepackage{tocvsec2} % возможность менять учитываемую глубину разделов в оглавлении
+\usepackage[subfigure]{tocloft}
+\usepackage[newfloat]{minted}
+\removefromtoclist[float]{lol}
+\captionsetup[listing]{position=top}
+
+\AtBeginEnvironment{figure}{\vspace{0.5cm}}
+\AtBeginEnvironment{table}{\vspace{0.5cm}}
+\AtBeginEnvironment{listing}{\vspace{0.5cm}}
+\AtBeginEnvironment{algorithm}{\vspace{0.5cm}}
+\AtBeginEnvironment{minted}{\vspace{-0.5cm}}
+
+\usepackage{fancyvrb}
+\usepackage{ulem,bm,mathrsfs,ifsym} %зачеркивания, особо жирный стиль и RSFS начертание
+\usepackage{sectsty} % переопределение стилей подразделов
+%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Поля и разметка страницы %%%
+\usepackage{pdflscape}                              % Для включения альбомных страниц
+\usepackage{geometry}                               % Для последующего задания полей
+\geometry{a4paper,tmargin=2cm,bmargin=2cm,lmargin=3cm,rmargin=1cm} % тоже самое, но лучше
+
+%%% Математические пакеты %%%
+\usepackage{amsthm,amsfonts,amsmath,amssymb,amscd}  % Математические дополнения от AMS
+\usepackage{mathtools}                              % Добавляет окружение multlined
+\usepackage[perpage]{footmisc}
+%\usepackage{times}
+
+%%%% Установки для размера шрифта 14 pt %%%%
+%% Формирование переменных и констант для сравнения (один раз для всех подключаемых файлов)%%
+%% должно располагаться до вызова пакета fontspec или polyglossia, потому что они сбивают его работу
+%\newlength{\curtextsize}
+%\newlength{\bigtextsize}
+%\setlength{\bigtextsize}{13pt}
+\KOMAoptions{fontsize=14pt}
+
+\makeatletter
+\def\showfontsize{\f@size{} point}
+\makeatother
+
+%\makeatletter
+%\show\f@size                                       % неплохо для отслеживания, но вызывает стопорение процесса, если документ компилируется без команды  -interaction=nonstopmode
+%\setlength{\curtextsize}{\f@size pt}
+%\makeatother
+
+%шрифт times
+\usepackage{tempora}
+%\usepackage{pscyr}
+%\setmainfont[Ligatures={TeX,Historic}]{Times New Roman}
+
+   %%% Решение проблемы копирования текста в буфер кракозябрами
+%    \input glyphtounicode.tex
+%    \input glyphtounicode-cmr.tex %from pdfx package
+%    \pdfgentounicode=1
+    \usepackage{cmap}                               % Улучшенный поиск русских слов в полученном pdf-файле
+    \usepackage[T1]{fontenc}                       % Поддержка русских букв
+    \usepackage[utf8]{inputenc}                     % Кодировка utf8
+    \usepackage[english, main=russian]{babel}            % Языки: русский, английский
+%   \IfFileExists{pscyr.sty}{\usepackage{pscyr}}{}  % Красивые русские шрифты
+%\renewcommand{\rmdefault}{ftm}
+%%% Оформление абзацев %%%
+\usepackage{indentfirst}                            % Красная строка
+%\usepackage{eskdpz}
+
+%%% Таблицы %%%
+\usepackage{longtable}                              % Длинные таблицы
+\usepackage{multirow,makecell,array}                % Улучшенное форматирование таблиц
+\usepackage{booktabs}                               % Возможность оформления таблиц в классическом книжном стиле (при правильном использовании не противоречит ГОСТ)
+
+%%% Общее форматирование
+\usepackage{soulutf8}                               % Поддержка переносоустойчивых подчёркиваний и зачёркиваний
+\usepackage{icomma}                                 % Запятая в десятичных дробях
+
+
+
+%%% Изображения %%%
+\usepackage{graphicx}                               % Подключаем пакет работы с графикой
+\usepackage{wrapfig}
+
+%%% Списки %%%
+\usepackage{enumitem}
+
+%%% Подписи %%%
+\usepackage{caption}                                % Для управления подписями (рисунков и таблиц) % Может управлять номерами рисунков и таблиц с caption %Иногда может управлять заголовками в списках рисунков и таблиц
+%% Использование:
+%\begin{table}[h!]\ContinuedFloat - чтобы не переключать счетчик
+%\captionsetup{labelformat=continued}% должен стоять до самого caption
+%\caption{}
+% либо ручками \caption*{Продолжение таблицы~\ref{...}.} :)
+
+%%% Интервалы %%%
+\addto\captionsrussian{%
+  \renewcommand{\listingname}{Листинг}%
+}
+%%% Счётчики %%%
+\usepackage[figure,table,section]{totalcount}               % Счётчик рисунков и таблиц
+\DeclareTotalCounter{lstlisting}
+\usepackage{totcount}                               % Пакет создания счётчиков на основе последнего номера подсчитываемого элемента (может требовать дважды компилировать документ)
+\usepackage{totpages}                               % Счётчик страниц, совместимый с hyperref (ссылается на номер последней страницы). Желательно ставить последним пакетом в преамбуле
+
+%%% Продвинутое управление групповыми ссылками (пока только формулами) %%%
+%% Кодировки и шрифты %%%
+
+%   \newfontfamily{\cyrillicfont}{Times New Roman}
+%   \newfontfamily{\cyrillicfonttt}{CMU Typewriter Text}
+	%\setmainfont{Times New Roman}
+	%\newfontfamily\cyrillicfont{Times New Roman}
+	%\setsansfont{Times New Roman}                    %% задаёт шрифт без засечек
+%	\setmonofont{Liberation Mono}               %% задаёт моноширинный шрифт
+%    \IfFileExists{pscyr.sty}{\renewcommand{\rmdefault}{ftm}}{}
+%%% Интервалы %%%
+%linespread-реализация ближе к реализации полуторного интервала в ворде.
+%setspace реализация заточена под шрифты 10, 11, 12pt, под остальные кегли хуже, но всё же ближе к типографской классике.
+\linespread{1.3}                    % Полуторный интервал (ГОСТ Р 7.0.11-2011, 5.3.6)
+%\renewcommand{\@biblabel}[1]{#1}
+
+%%% Гиперссылки %%%
+\usepackage{hyperref}
+
+%%% Выравнивание и переносы %%%
+\sloppy                             % Избавляемся от переполнений
+\clubpenalty=10000                  % Запрещаем разрыв страницы после первой строки абзаца
+\widowpenalty=10000                 % Запрещаем разрыв страницы после последней строки абзаца
+
+\makeatletter % малые заглавные, small caps shape
+\let\@@scshape=\scshape
+\renewcommand{\scshape}{%
+  \ifnum\strcmp{\f@series}{bx}=\z@
+    \usefont{T1}{cmr}{bx}{sc}%
+  \else
+    \ifnum\strcmp{\f@shape}{it}=\z@
+      \fontshape{scsl}\selectfont
+    \else
+      \@@scshape
+    \fi
+  \fi}
+\makeatother
+
+%%% Подписи %%%
+%\captionsetup{%
+%singlelinecheck=off,                % Многострочные подписи, например у таблиц
+%skip=2pt,                           % Вертикальная отбивка между подписью и содержимым рисунка или таблицы определяется ключом
+%justification=centering,            % Центрирование подписей, заданных командой \caption
+%}
+%%%        Подключение пакетов                 %%%
+\usepackage{ifthen}                 % добавляет ifthenelse
+%%% Инициализирование переменных, не трогать!  %%%
+\newcounter{intvl}
+\newcounter{otstup}
+\newcounter{contnumeq}
+\newcounter{contnumfig}
+\newcounter{contnumtab}
+\newcounter{pgnum}
+\newcounter{bibliosel}
+\newcounter{chapstyle}
+\newcounter{headingdelim}
+\newcounter{headingalign}
+\newcounter{headingsize}
+\newcounter{tabcap}
+\newcounter{tablaba}
+\newcounter{tabtita}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%% Область упрощённого управления оформлением %%%
+
+%% Интервал между заголовками и между заголовком и текстом
+% Заголовки отделяют от текста сверху и снизу тремя интервалами (ГОСТ Р 7.0.11-2011, 5.3.5)
+\setcounter{intvl}{3}               % Коэффициент кратности к размеру шрифта
+
+%% Отступы у заголовков в тексте
+\setcounter{otstup}{0}              % 0 --- без отступа; 1 --- абзацный отступ
+
+%% Нумерация формул, таблиц и рисунков
+\setcounter{contnumeq}{1}           % Нумерация формул: 0 --- пораздельно (во введении подряд, без номера раздела); 1 --- сквозная нумерация по всей диссертации
+\setcounter{contnumfig}{1}          % Нумерация рисунков: 0 --- пораздельно (во введении подряд, без номера раздела); 1 --- сквозная нумерация по всей диссертации
+\setcounter{contnumtab}{1}          % Нумерация таблиц: 0 --- пораздельно (во введении подряд, без номера раздела); 1 --- сквозная нумерация по всей диссертации
+
+%% Оглавление
+\setcounter{pgnum}{0}               % 0 --- номера страниц никак не обозначены; 1 --- Стр. над номерами страниц (дважды компилировать после изменения)
+
+%% Библиография
+\setcounter{bibliosel}{1}           % 0 --- встроенная реализация с загрузкой файла через движок bibtex8; 1 --- реализация пакетом biblatex через движок biber
+
+%% Текст и форматирование заголовков
+\setcounter{chapstyle}{1}           % 0 --- разделы только под номером; 1 --- разделы с названием "Глава" перед номером
+\setcounter{headingdelim}{1}        % 0 --- номер отделен пропуском в 1em или \quad; 1 --- номера разделов и приложений отделены точкой с пробелом, подразделы пропуском без точки; 2 --- номера разделов, подразделов и приложений отделены точкой с пробелом.
+
+%% Выравнивание заголовков в тексте
+\setcounter{headingalign}{0}        % 0 --- по центру; 1 --- по левому краю
+
+%% Размеры заголовков в тексте
+\setcounter{headingsize}{0}         % 0 --- по ГОСТ, все всегда 14 пт; 1 --- пропорционально изменяющийся размер в зависимости от базового шрифта
+
+%% Подпись таблиц
+\setcounter{tabcap}{0}              % 0 --- по ГОСТ, номер таблицы и название разделены тире, выровнены по левому краю, при необходимости на нескольких строках; 1 --- подпись таблицы не по ГОСТ, на двух и более строках, дальнейшие настройки:
+%Выравнивание первой строки, с подписью и номером
+\setcounter{tablaba}{2}             % 0 --- по левому краю; 1 --- по центру; 2 --- по правому краю
+%Выравнивание строк с самим названием таблицы
+\setcounter{tabtita}{1}             % 0 --- по левому краю; 1 --- по центру; 2 --- по правому краю
+
+%%% Рисунки %%%
+\DeclareCaptionLabelSeparator*{emdash}{~--- }             % (ГОСТ 2.105, 4.3.1)
+\captionsetup[figure]{labelsep=emdash,font=onehalfspacing,position=bottom}
+
+%%% Таблицы %%%
+\ifthenelse{\equal{\thetabcap}{0}}{%
+    \newcommand{\tabcapalign}{\raggedright}  % по левому краю страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetablaba}{0} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabcapalign}{\raggedright}  % по левому краю страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetablaba}{1} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabcapalign}{\centering}    % по центру страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetablaba}{2} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabcapalign}{\raggedleft}   % по правому краю страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetabtita}{0} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabtitalign}{\raggedright}  % по левому краю страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetabtita}{1} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabtitalign}{\centering}    % по центру страницы или аналога parbox
+}
+
+\ifthenelse{\equal{\thetabtita}{2} \AND \equal{\thetabcap}{1}}{%
+    \newcommand{\tabtitalign}{\raggedleft}   % по правому краю страницы или аналога parbox
+}
+
+\DeclareCaptionFormat{tablenocaption}{\tabcapalign #1\strut}        % Наименование таблицы отсутствует
+\ifthenelse{\equal{\thetabcap}{0}}{%
+    \DeclareCaptionFormat{tablecaption}{\tabcapalign #1#2#3}
+    \captionsetup[table]{labelsep=emdash}                       % тире как разделитель идентификатора с номером от наименования
+}{%
+    \DeclareCaptionFormat{tablecaption}{\tabcapalign #1#2\par%  % Идентификатор таблицы на отдельной строке
+        \tabtitalign{#3}}                                       % Наименование таблицы строкой ниже
+    \captionsetup[table]{labelsep=space}                        % пробельный разделитель идентификатора с номером от наименования
+}
+\captionsetup[table]{format=tablecaption,singlelinecheck=off,font=onehalfspacing,position=top,skip=-5pt}  % многострочные наименования и прочее
+\DeclareCaptionLabelFormat{continued}{Продолжение таблицы~#2}
+\setlength{\belowcaptionskip}{.2cm}
+\setlength{\intextsep}{0ex}
+
+%%% Подписи подрисунков %%%
+\renewcommand{\thesubfigure}{\asbuk{subfigure}}           % Буквенные номера подрисунков
+\captionsetup[subfigure]{font={normalsize},               % Шрифт подписи названий подрисунков (не отличается от основного)
+    labelformat=brace,                                    % Формат обозначения подрисунка
+    justification=centering,                              % Выключка подписей (форматирование), один из вариантов
+}
+%\DeclareCaptionFont{font12pt}{\fontsize{12pt}{13pt}\selectfont} % объявляем шрифт 12pt для использования в подписях, тут же надо интерлиньяж объявлять, если не наследуется
+%\captionsetup[subfigure]{font={font12pt}}                 % Шрифт подписи названий подрисунков (всегда 12pt)
+
+%%% Настройки гиперссылок %%%
+
+\definecolor{linkcolor}{rgb}{0.0,0,0}
+\definecolor{citecolor}{rgb}{0,0.0,0}
+\definecolor{urlcolor}{rgb}{0,0,0}
+
+\hypersetup{
+    linktocpage=true,           % ссылки с номера страницы в оглавлении, списке таблиц и списке рисунков
+%    linktoc=all,                % both the section and page part are links
+%    pdfpagelabels=false,        % set PDF page labels (true|false)
+    plainpages=true,           % Forces page anchors to be named by the Arabic form  of the page number, rather than the formatted form
+    colorlinks,                 % ссылки отображаются раскрашенным текстом, а не раскрашенным прямоугольником, вокруг текста
+    linkcolor={linkcolor},      % цвет ссылок типа ref, eqref и подобных
+    citecolor={citecolor},      % цвет ссылок-цитат
+    urlcolor={urlcolor},        % цвет гиперссылок
+    pdflang={ru},
+}
+\urlstyle{same}
+%%% Шаблон %%%
+%\DeclareRobustCommand{\todo}{\textcolor{red}}       % решаем проблему превращения названия цвета в результате \MakeUppercase, http://tex.stackexchange.com/a/187930/79756 , \DeclareRobustCommand protects \todo from expanding inside \MakeUppercase
+\setlength{\parindent}{2.5em}                       % Абзацный отступ. Должен быть одинаковым по всему тексту и равен пяти знакам (ГОСТ Р 7.0.11-2011, 5.3.7).
+
+%%% Списки %%%
+% Используем дефис для ненумерованных списков (ГОСТ 2.105-95, 4.1.7)
+%\renewcommand{\labelitemi}{\normalfont\bfseries~{---}}
+\renewcommand{\labelitemi}{\bfseries~{---}}
+\setlist{nosep,%                                    % Единый стиль для всех списков (пакет enumitem), без дополнительных интервалов.
+    labelindent=\parindent,leftmargin=*%            % Каждый пункт, подпункт и перечисление записывают с абзацного отступа (ГОСТ 2.105-95, 4.1.8)
+}
+%%%%%%%%%%%%%%%%%%%%%%
+%\usepackage{xltxtra} % load xunicode
+
+\usepackage{ragged2e}
+\usepackage[explicit]{titlesec}
+\usepackage{placeins}
+\usepackage{xparse}
+\usepackage{csquotes}
+
+\usepackage{listingsutf8}
+\usepackage{url} %пакеты расширений
+\usepackage{algorithm, algorithmicx}
+\usepackage[noend]{algpseudocode}
+\usepackage{blkarray}
+\usepackage{chngcntr}
+\usepackage{tabularx}
+\usepackage[backend=biber,
+    bibstyle=gost-numeric,
+    citestyle=nature]{biblatex}
+\newcommand*\template[1]{\text{<}#1\text{>}}
+\addbibresource{biblio.bib}
+
+\titleformat{name=\section,numberless}[block]{\normalfont\Large\centering}{}{0em}{#1}
+\titleformat{\section}[block]{\normalfont\Large\bfseries\raggedright}{}{0em}{\thesection\hspace{0.25em}#1}
+\titleformat{\subsection}[block]{\normalfont\Large\bfseries\raggedright}{}{0em}{\thesubsection\hspace{0.25em}#1}
+\titleformat{\subsubsection}[block]{\normalfont\large\bfseries\raggedright}{}{0em}{\thesubsubsection\hspace{0.25em}#1}
+
+\let\Algorithm\algorithm
+\renewcommand\algorithm[1][]{\Algorithm[#1]\setstretch{1.5}}
+%\renewcommand{\listingscaption}{Листинг}
+
+\usepackage{pifont}
+\usepackage{calc}
+\usepackage{suffix}
+\usepackage{csquotes}
+\DeclareQuoteStyle{russian}
+    {\guillemotleft}{\guillemotright}[0.025em]
+    {\quotedblbase}{\textquotedblleft}
+\ExecuteQuoteOptions{style=russian}
+\newcommand{\enq}[1]{\enquote{#1}}
+\newcommand{\eng}[1]{\begin{english}#1\end{english}}
+% Подчиненные счетчики в окружениях http://old.kpfu.ru/journals/izv_vuz/arch/sample1251.tex
+\newcounter{cTheorem}
+\newcounter{cDefinition}
+\newcounter{cConsequent}
+\newcounter{cExample}
+\newcounter{cLemma}
+\newcounter{cConjecture}
+\newtheorem{Theorem}{Теорема}[cTheorem]
+\newtheorem{Definition}{Определение}[cDefinition]
+\newtheorem{Consequent}{Следствие}[cConsequent]
+\newtheorem{Example}{Пример}[cExample]
+\newtheorem{Lemma}{Лемма}[cLemma]
+\newtheorem{Conjecture}{Гипотеза}[cConjecture]
+
+\renewcommand{\theTheorem}{\arabic{Theorem}}
+\renewcommand{\theDefinition}{\arabic{Definition}}
+\renewcommand{\theConsequent}{\arabic{Consequent}}
+\renewcommand{\theExample}{\arabic{Example}}
+\renewcommand{\theLemma}{\arabic{Lemma}}
+\renewcommand{\theConjecture}{\arabic{Conjecture}}
+%\makeatletter
+\NewDocumentCommand{\Newline}{}{\text{\\}}
+\newcommand{\sequence}[2]{\ensuremath \left(#1,\ \dots,\ #2\right)}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\renewcommand{\listalgorithmname}{Список алгоритмов}
+\floatname{algorithm}{Листинг}
+\renewcommand{\lstlistingname}{Листинг}
+\renewcommand{\thealgorithm}{\arabic{algorithm}}
+
+\newcommand{\refAlgo}[1]{(листинг \ref{#1})}
+\newcommand{\refImage}[1]{(рисунок \ref{#1})}
+
+\renewcommand{\theenumi}{\arabic{enumi}.}% Меняем везде перечисления на цифра.цифра
+\renewcommand{\labelenumi}{\arabic{enumi}.}% Меняем везде перечисления на цифра.цифра
+\renewcommand{\theenumii}{\arabic{enumii}}% Меняем везде перечисления на цифра.цифра
+\renewcommand{\labelenumii}{(\arabic{enumii})}% Меняем везде перечисления на цифра.цифра
+\renewcommand{\theenumiii}{\roman{enumiii}}% Меняем везде перечисления на цифра.цифра
+\renewcommand{\labelenumiii}{(\roman{enumiii})}% Меняем везде перечисления на цифра.цифра
+%\newfontfamily\AnkaCoder[Path=src/fonts/]{AnkaCoder-r.ttf}
+\renewcommand{\labelitemi}{---}
+\renewcommand{\labelitemii}{---}
+
+%\usepackage{courier}
+
+\lstdefinelanguage{Refal}{
+  alsodigit = {.,<,>},
+  morekeywords = [1]{$ENTRY},
+  morekeywords = [2]{Go, Put, Get, Open, Close, Arg, Add, Sub, Mul, Div, Symb, Explode, Implode},
+  %keyword4
+  morekeywords = [3]{<,>},
+  %keyword5
+  morekeywords = [4]{e.,t.,s.},
+  sensitive = true,
+  morecomment = [l]{*},
+  morecomment = [s]{/*}{*/},
+  commentstyle = \color{mygreen},
+  morestring = [b]",
+  morestring = [b]',
+  stringstyle = \color{purple}
+}
+
+\makeatletter
+\def\p@subsection{}
+\def\p@subsubsection{\thesection\,\thesubsection\,}
+\makeatother
+\newcommand{\prog}[1]{{\ttfamily\small#1}}
+\lstset{ %
+  backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+  basicstyle=\ttfamily\footnotesize,
+  %basicstyle=\footnotesize\AnkaCoder,        % the size of the fonts that are used for the code
+  breakatwhitespace=false,         % sets if automatic breaks shoulbd only happen at whitespace
+  breaklines=true,                 % sets automatic line breaking
+  captionpos=top,                    % sets the caption-position to bottom
+  commentstyle=\color{mygreen},    % comment style
+  deletekeywords={...},            % if you want to delete keywords from the given language
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  extendedchars=true,              % lets you use non-ASCII characters; for 8-bits encodings only, does not work with UTF-8
+  inputencoding=utf8,
+  frame=single,                    % adds a frame around the code
+  keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+  keywordstyle=\bf,       % keyword style
+  language=Refal,                    % the language of the code
+  morekeywords={<,>,$ENTRY,Go,Arg, Open, Close, e., s., t., Get, Put},
+  							       % if you want to add more keywords to the set
+  numbers=left,                    % where to put the line-numbers; possible values are (none, left, right)
+  numbersep=5pt,                   % how far the line-numbers are from the code
+  xleftmargin=25pt,
+  xrightmargin=25pt,
+  numberstyle=\small\color{black}, % the style that is used for the line-numbers
+  rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+  showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+  showstringspaces=false,          % underline spaces within strings only
+  showtabs=false,                  % show tabs within strings adding particular underscores
+  stepnumber=1,                    % the step between two line-numbers. If it's 1, each line will be numbered
+  stringstyle=\color{mymauve},     % string literal style
+  tabsize=8,                       % sets default tabsize to 8 spaces
+  title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+\newcommand{\anonsection}[1]{\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{section}{\protect\numberline{}#1}
+\section*{#1}\vspace*{2.5ex} % По госту положены 3 пустые строки после заголовка ненумеруемого раздела
+}
+\newcommand{\sectionbreak}{\clearpage}
+\renewcommand{\sectionfont}{\normalsize} % Сбиваем стиль оглавления в стандартный
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}} % Точки в оглавлении напротив разделов
+
+\renewcommand{\cftsecfont}{\normalfont\large} % Переключение на times в содержании
+\renewcommand{\cftsubsecfont}{\normalfont\large} % Переключение на times в содержании
+
+\usepackage{caption}
+%\captionsetup[table]{justification=raggedleft}
+%\captionsetup[figure]{justification=centering,labelsep=endash}
+\usepackage{amsmath}    % \bar    (матрицы и проч. ...)
+\usepackage{amsfonts}   % \mathbb (символ для множества действительных чисел и проч. ...)
+\usepackage{mathtools}  % \abs, \norm
+    \DeclarePairedDelimiter\abs{\lvert}{\rvert} % операция модуля
+    \DeclarePairedDelimiter\norm{\lVert}{\rVert} % операция нормы
+\DeclareTextCommandDefault{\textvisiblespace}{%
+  \mbox{\kern.06em\vrule \@height.3ex}%
+  \vbox{\hrule \@width.3em}%
+  \hbox{\vrule \@height.3ex}}
+\newsavebox{\spacebox}
+\begin{lrbox}{\spacebox}
+\verb*! !
+\end{lrbox}
+\newcommand{\aspace}{\usebox{\spacebox}}
+\DeclareTotalCounter{listing}
+
+\makeatletter
+\renewcommand*{\p@subsubsection}{}
+\makeatother
+
+\begin{document}
+\sloppy
+
+\def\figurename{Рисунок}
+
+\begin{titlepage}
+	\thispagestyle{empty}
+	\newpage
+
+	\vspace*{-30pt}
+	\hspace{-45pt}
+	\begin{minipage}{0.17\textwidth}
+		\hspace*{-20pt}\centering
+		\includegraphics[width=1.3\textwidth]{images/emblem.png}
+	\end{minipage}
+	\begin{minipage}{0.82\textwidth}\small \textbf{
+			\vspace*{-0.7ex}
+			\hspace*{-10pt}\centerline{Министерство науки и высшего образования Российской Федерации}
+			\vspace*{-0.7ex}
+			\centerline{Федеральное государственное бюджетное образовательное учреждение }
+			\vspace*{-0.7ex}
+			\centerline{высшего образования}
+			\vspace*{-0.7ex}
+			\centerline{<<Московский государственный технический университет}
+			\vspace*{-0.7ex}
+			\centerline{имени Н.Э. Баумана}
+			\vspace*{-0.7ex}
+			\centerline{(национальный исследовательский университет)>>}
+			\vspace*{-0.7ex}
+			\centerline{(МГТУ им. Н.Э. Баумана)}}
+	\end{minipage}
+
+	\vspace{-2pt}
+	\hspace{-34.5pt}\rule{\textwidth}{2.5pt}
+
+	\vspace*{-20.3pt}
+	\hspace{-34.5pt}\rule{\textwidth}{0.4pt}
+
+	\vspace{0.5ex}
+	\noindent \small ФАКУЛЬТЕТ\hspace{80pt} <<Информатика и системы управления>>
+
+	\vspace*{-16pt}
+	\hspace{35pt}\rule{0.855\textwidth}{0.4pt}
+
+	\vspace{0.5ex}
+	\noindent \small КАФЕДРА\hspace{50pt} <<Теоретическая информатика и компьютерные технологии>>
+
+	\vspace*{-16pt}
+	\hspace{25pt}\rule{0.875\textwidth}{0.4pt}
+
+
+	\vspace{3em}
+
+	\begin{center}
+		\Large \bf{РАСЧЕТНО-ПОЯСНИТЕЛЬНАЯ ЗАПИСКА\\\textbf{\textit{К КУРСОВОЙ РАБОТЕ\\НА ТЕМУ:}} \\}
+	\end{center}
+
+	\vspace*{-6ex}
+	\begin{center}
+		\Large{\textit{\textbf{<<Расширение возможностей}}}
+
+		\vspace*{-3ex}
+		\rule{0.9\textwidth}{1.2pt}
+
+		\vspace*{-0.2ex}
+		\Large{\textit{\textbf{библиотеки parser\_edsl>>}}}
+		\vspace*{-3ex}
+		\vspace*{-0.2ex}
+		\rule{0.9\textwidth}{1.2pt}
+
+		\vspace*{-0.2ex}
+		\rule{0.9\textwidth}{1.2pt}
+
+		\vspace*{-0.2ex}
+		\rule{0.9\textwidth}{1.2pt}
+
+		\vspace*{-0.2ex}
+		\rule{0.9\textwidth}{1.2pt}
+	\end{center}
+
+	\vspace{\fill}
+
+
+	\newlength{\ML}
+	\settowidth{\ML}{«\underline{\hspace{0.7cm}}» \underline{\hspace{2cm}}}
+
+	\noindent Студент \underline{\text{ИУ9-71Б}} \hfill \underline{ \hspace{4cm}}\quad
+	\underline{\parbox{4cm}{\centering\raisebox{0.25ex}{ Гречко Г.В.}}}
+
+	\vspace{-2.1ex}
+	\noindent\hspace{9ex}\scriptsize{(Группа)}\normalsize\hspace{170pt}\hspace{2ex}\scriptsize{(Подпись, дата)}\normalsize\hspace{30pt}\hspace{6ex}\scriptsize{(И.О. Фамилия)}\normalsize
+
+	\bigskip
+
+	\noindent Руководитель  \hfill \underline{\hspace{4cm}}\quad
+	\underline{\parbox{4cm}{\centering\raisebox{0.25ex}{ Коновалов А.В.}}}
+
+	\vspace{-2ex}
+	\noindent\hspace{13.5ex}\normalsize\hspace{170pt}\hspace{2ex}\scriptsize{(Подпись, дата)}\normalsize\hspace{30pt}\hspace{6ex}\scriptsize{(И.О. Фамилия)}\normalsize
+
+	\bigskip
+
+	\noindent Консультант\hfill \underline{\hspace{4cm}}\quad
+	\underline{\hspace{4cm}}
+
+	\vspace{-2ex}
+	\noindent\hspace{13.5ex}\normalsize\hspace{170pt}\hspace{2ex}\scriptsize{(Подпись, дата)}\normalsize\hspace{30pt}\hspace{6ex}\scriptsize{(И.О. Фамилия)}\normalsize
+	\vfill
+
+	%\vspace{\fill}
+
+
+
+	\begin{center}
+		\textsl{2025 г.}
+	\end{center}
+\end{titlepage}
+
+%\renewcommand{\ttdefault}{pcr}
+
+\setlength{\tabcolsep}{3pt}
+\newpage
+\setcounter{page}{2}
+%----------------------------------------------------------------------------
+%                  ОТСЮДА --- СОБСТВЕННО ТЕКСТ
+%----------------------------------------------------------------------------
+
+\newpage
+\renewcommand\contentsname{\hfill{\normalfont{СОДЕРЖАНИЕ}}\hfill}  %Оглавление
+\tableofcontents
+\newpage
+\anonsection{Введение}  %Введение
+
+В современном мире разработка компиляторов и интерпретаторов занимает важное место в компьютерных науках, позволяя
+создавать эффективные инструменты для анализа и трансляции языков программирования. Для упрощения разработки
+компиляторов и повышения их
+гибкости широко применяются специализированные библиотеки, реализующие различные методы синтаксического анализа.
+Библиотека parser\_edsl является одним из таких инструментов, предоставляющих возможность описания синтаксиса
+языков, используя средства объектно-ориентированных языков программирования (python в случае данной библиотеки).
+
+Цель данной курсовой работы заключается в расширении возможностей библиотеки parser\_edsl
+за счёт реализации дополнительной функциональности:
+
+\begin{itemize}
+	\item Поддержка лексических ошибок --- функции вычисления атрибутов токенов
+	могут возбуждать библиотечное исключение, которое затем транслируется
+	в синтаксическую ошибку.
+	\item Поддержка режимов разбора <<предсказывающий анализ>> (только для LL(1)-
+	грамматик) и <<алгоритм Эрли>>.
+	\item Возможность указания приоритета и ассоциативности в стиле Bison'a.
+\end{itemize}
+
+% \newpage
+
+\section{Основные теоретические сведения}
+
+\subsection{Компилирование}
+
+Компиляция — это процесс преобразования исходного кода, написанного на одном языке программирования,
+на другой язык или машинный код,
+обычно пригодный для выполнения целевой машиной\cite{conmocons}. Основная цель компиляции заключается в том, чтобы
+трансформировать высокоуровневые конструкции, понятные человеку, в низкоуровневые инструкции, исполняемые
+процессором. Помимо этого, компиляторы могут выполнять различные оптимизации или находить ошибки в коде программы.
+
+Стандартный процесс компиляции обычно включает несколько последовательных фаз, каждая из которых выполняет свою задачу:
+
+\begin{enumerate}
+	\item \textbf{Лексический анализ (токенизация)} --- На этой фазе исходный текст программы разбивается на
+	элементарные единицы — лексемы (токены), такие как ключевые слова, идентификаторы, операторы и литералы.
+	Лексический анализатор также занимается удалением незначащих символов (например, пробелов, комментариев)
+	и обработкой лексических ошибок.
+
+	\item \textbf{Синтаксический анализ} --- После лексического анализа последовательность токенов анализируется
+	с точки зрения синтаксиса языка. В ходе синтаксического разбора строится синтаксическое дерево,
+	которое отражает иерархическую структуру программы согласно грамматике языка. Здесь выявляются синтаксические
+	ошибки, если входной поток токенов не соответствует правилам языка.
+
+	\item \textbf{Семантический анализ} --- Построенное синтаксическое дерево подвергается дополнительной проверке
+	на семантическую корректность. На этой фазе осуществляется анализ типов, разрешение идентификаторов,
+	проверка областей видимости и другие аспекты, не охватываемые синтаксическим анализом. Семантический анализ
+	позволяет выявить логические и концептуальные ошибки, которые не были обнаружены ранее.
+
+	\item \textbf{Генерация промежуточного кода} --- Для упрощения дальнейших оптимизаций исходный код преобразуется
+	в промежуточное представление (IR), которое, как правило, является независимым от целевой аппаратной платформы.
+	Такое представление облегчает проведение оптимизаций и последующую трансляцию в машинный код.
+
+	\item \textbf{Оптимизация} --- На этой фазе производится улучшение промежуточного представления для повышения
+	эффективности программы. Оптимизации могут включать устранение избыточных вычислений, оптимизацию циклов,
+	минимизацию использования памяти и прочие техники, направленные на улучшение производительности.
+
+	\item \textbf{Генерация целевого кода} --- Заключительный этап компиляции заключается в преобразовании
+	оптимизированного промежуточного представления в конечный код, который может быть исполнен на конкретной
+	аппаратной платформе. Это может быть машинный код, ассемблер или другой специализированный формат.
+\end{enumerate}
+
+Каждый этап решает специфическую задачу, что облегчает обнаружение ошибок и их последующее исправление, а
+также позволяет проводить конкретные оптимизации, направленные на ускорение одного из этапов компиляции.
+В результате получается надёжный и эффективный компилятор, пригодный для решения серьезных задач.
+
+Библиотека parser\_edsl предоставляет инструменты для решения задач лексического, синтаксического и семантического
+анализов, поэтому рассмотрим эти шаги подробнее.
+
+\subsection{Лексический разбор}
+
+Лексический анализатор читает текст из входного потока и разбивает его на лексемы. Если разбить на лексемы не получится,
+анализатор вернет ошибку лексического разбора. Псевдокод для лексического анализатора, используемого в библиотеке
+parser\_edsl, представлен на листинге \ref{lst:lex}.
+
+\begin{listing}[H]
+	\caption{Лексический разбор}
+	\label{lst:lex}
+\begin{algorithm}[H]
+\begin{algorithmic}[1]
+\Procedure{NextToken}{domains, text, skip\_token}
+  \State $pos \gets \text{начальная позиция (объект Position)}$
+  \While{$pos.offset < \text{length}(text)$}
+    \State $offset \gets pos.offset$
+    \State $matches \gets \varnothing$
+    \ForAll{доменов $d$ из \texttt{domains}}
+      \State $(length, attr) \gets d.match(text, offset)$
+      \State $matches \gets matches \cup \{(d, d.priority, length, attr)\}$
+    \EndFor
+    \State $(domain, priority, length, attr) \gets \max(matches,\ \lambda (d, pr, l, a): (l, pr))$
+    \State \textbf{assert} $length > 0$
+    \If{$attr$ соответствует \texttt{ErrorTerminal}}
+      \State \textbf{raise} LexerError($pos$, $text$)
+    \EndIf
+    \State $new\_pos \gets pos.\text{shift}(text[offset : offset + length])$
+    \State $fragment \gets \text{Fragment}(pos, new\_pos)$
+    \State $pos \gets new\_pos$
+    \If{$attr \neq skip\_token$}
+      \State \Return Token($domain$, $fragment$, $attr$)
+    \EndIf
+  \EndWhile
+  \State \Return Token(EOF\_SYMBOL, Fragment($pos$, $pos$), \texttt{None})
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+\end{listing}
+
+\subsection{Алгоритмы синтаксического разбора}
+
+Существует множество алгоритмов синтаксического разбора, каждый из которых имеет свои преимущества и ограничения.
+Выбор конкретного метода определяется характеристиками грамматики языка и требованиями к скорости,
+объёму памяти и способности обработки неоднозначностей. В данной работе будут затрагиваться алгоритмы LR разбора,
+Эрли и предсказывающий разбор для LL(1) грамматик. Рассмотрим их подробнее.
+
+\subsubsection{LR разбор}
+
+LR-разбор\cite{lr0} (от англ. Left-to-right, Rightmost derivation in reverse) является одним из самых мощных и широко
+используемых методов синтаксического анализа. Основная идея метода заключается в последовательном сканировании
+входной строки слева направо с использованием стека для хранения промежуточных состояний. Алгоритм выполняет
+так называемые операции сдвига (shift) и свёртки (reduce), преобразуя последовательность токенов в структуру,
+соответствующую правилам грамматики.
+
+К преимуществам LR-разбора относятся:
+
+\begin{itemize}
+	\item Обработка широкого класса грамматик --- алгоритм способен работать с грамматиками, для которых невозможно
+	применить более простые виды анализаторов (например --- LL(1) предсказывающий разбор).
+	\item Детерминированность --- При корректном построении таблиц переходов алгоритм не требует отката, что
+	обеспечивает высокую скорость анализа.
+\end{itemize}
+
+Однако, работа LR-анализаторов может оказаться достаточно затратной по вычислительным ресурсам для больших грамматик,
+поскольку таблицы переходов могут иметь значительные размеры, что накладывает ограничения на использование
+данного алгоритма.
+
+На листинге \ref{lst:lr} представлен псевдокод алгоритма LR-разбора.
+
+\begin{listing}[H]
+	\caption{LR-разбор}
+	\label{lst:lr}
+\begin{algorithm}[H]
+	\begin{algorithmic}[1]
+	\Procedure{LRParse}{tokens, ACTION, GOTO}
+	  \State $stack \gets [0]$
+	  \State $i \gets 0$
+	  \While{true}
+		\State $s \gets$ \textbf{top}$(stack)$
+		\State $a \gets tokens[i]$
+		\State $action \gets$ ACTION[$s, a$]
+		\If{$action$ имеет вид <<shift $s'$>>}
+		  \State \textbf{push}($s'$) на $stack$
+		  \State $i \gets i + 1$
+		\ElsIf{$action$ имеет вид <<reduce $A \to \beta$>>}
+		  \State \textbf{pop} $2\cdot |\beta|$ элементов из $stack$
+		  \State $t \gets$ \textbf{top}$(stack)$
+		  \State \textbf{push}(GOTO[$t, A$]) на $stack$
+		\ElsIf{$action$ является <<accept>>}
+		  \State \Return ok
+		\Else
+		  \State \Return fail
+		\EndIf
+	  \EndWhile
+	\EndProcedure
+	\end{algorithmic}
+	\end{algorithm}
+\end{listing}
+
+\subsubsection{Алгоритм Эрли}
+
+\label{sec:earleyint}
+
+Алгоритм Эрли\cite{earley} представляет собой универсальный метод синтаксического анализа, способный обрабатывать любые
+контекстно-свободные грамматики, включая неоднозначные. Данный алгоритм основан на принципах динамического
+программирования и допускает параллельное рассмотрение нескольких вариантов разбора входной строки.
+
+Главное преимущество алгоритма Эрли --- способность работать с грамматиками, содержащими неоднозначности.
+
+Основным недостатком алгоритма является его потенциальная вычислительная сложность. В худших случаях алгоритм
+может потребовать значительных вычислительных ресурсов, что так же, как и в случае LR разбора, накладывает
+дополнительные ограничения для практического применения.
+
+
+На листинге \ref{lst:earley} представлен псевдокод алгоритма Эрли.
+
+
+\begin{listing}[H]
+	\caption{Алгоритм Эрли}
+	\label{lst:earley}
+\begin{algorithm}[H]
+	\begin{algorithmic}[1]
+	\Procedure{EarleyParse}{tokens, Grammar}
+	  \State $n \gets$ длина(tokens)
+	  \State Инициализировать массив \texttt{chart[0..n]}, где каждая ячейка содержит множество состояний
+	  \State Добавить в \texttt{chart[0]} все состояния вида $(S \to \cdot \alpha, 0)$ для стартового символа $S$
+	  \For{$k \gets 0$ \textbf{to} $n$}
+		\Repeat
+		  \ForAll{состояний $(A \to \alpha \cdot B \beta, j)$ в \texttt{chart[k]}}
+			\If{$B$ --- нетерминал}
+			  \State \textbf{Predictor:} Для каждого правила $B \to \gamma$ добавить состояние $(B \to \cdot \gamma, k)$ в \texttt{chart[k]}
+			\EndIf
+		  \EndFor
+		\Until{не появляются новые состояния в \texttt{chart[k]}}
+
+		\ForAll{состояний $(A \to \alpha \cdot a \beta, j)$ в \texttt{chart[k]}}
+		  \If{$a = tokens[k]$}
+			\State \textbf{Scanner:} Добавить состояние $(A \to \alpha a \cdot \beta, j)$ в \texttt{chart[k+1]}
+		  \EndIf
+		\EndFor
+
+		\Repeat
+		  \ForAll{состояний $(B \to \gamma \cdot, j)$ в \texttt{chart[k]}}
+			\ForAll{состояний $(A \to \alpha \cdot B \beta, i)$ в \texttt{chart[j]}}
+			  \State \textbf{Completer:} Добавить состояние $(A \to \alpha B \cdot \beta, i)$ в \texttt{chart[k]}
+			\EndFor
+		  \EndFor
+		\Until{не появляются новые состояния в \texttt{chart[k]}}
+	  \EndFor
+	  \State \Return проверка наличия в \texttt{chart[n]} состояния $(S \to \gamma \cdot, 0)$
+	\EndProcedure
+	\end{algorithmic}
+	\end{algorithm}
+\end{listing}
+
+
+\subsubsection{Предсказывающий разбор для LL(1) грамматик}
+
+\label{sec:ll1int}
+
+Предсказывающий разбор является одним из наиболее интуитивно понятных и простых методов синтаксического анализа.
+Он применяется для грамматик, удовлетворяющих условию LL(1) – то есть таких, для которых по текущему входному
+символу и состоянию анализатора можно однозначно определить, какое правило применять.
+
+Преимуществами данного метода являются простота в его реализации и высокая скорость работы и, благодаря
+однозначному выбору следующего шага, обеспечивается высокая скорость разбора.
+
+На листинге \ref{lst:ll1} представлен псевдокод алгоритма предсказывающего ll1 разбора.
+
+\begin{listing}
+	\caption{Предсказывающий разбор для LL(1)-грамматик}
+	\label{lst:ll1}
+\begin{algorithm}[H]
+	\begin{algorithmic}[1]
+	\Procedure{LL1Parse}{tokens, table, Start}
+	  \State $stack \gets [\$, Start]$ \Comment{Знак \$ обозначает конец ввода}
+	  \State $i \gets 0$
+	  \While{$stack$ не пуст}
+		\State $X \gets$ \textbf{top}$(stack)$
+		\State $a \gets tokens[i]$
+		\If{$X$ --- терминальный символ или \$}
+		  \If{$X = a$}
+			 \State \textbf{pop}($stack$)
+			 \State $i \gets i + 1$
+		  \Else
+			 \State \Return ошибка разбора
+		  \EndIf
+		\Else
+		  \If{table[$X, a$] определена как правило $X \to Y_1 Y_2 \dots Y_k$}
+			 \State \textbf{pop}($stack$)
+			 \State \textbf{push}($Y_k, Y_{k-1}, \dots, Y_1$) на $stack$
+		  \Else
+			 \State \Return fail
+		  \EndIf
+		\EndIf
+	  \EndWhile
+	  \State \Return ok
+	\EndProcedure
+	\end{algorithmic}
+\end{algorithm}
+\end{listing}
+
+\subsection{Семантический разбор}
+
+Семантический разбор\cite{wilhelm2013compiler}, или семантический анализ, является важным этапом компиляции, который следует
+после синтаксического анализа. Его основная задача заключается в проверке корректности программы с
+точки зрения смысловых правил языка, которые не могут быть выражены исключительно с помощью синтаксиса.
+
+К основным задачам семантического разбора относятся:
+
+\begin{itemize}
+	\item Проверка типов --- проверка совместимости типов данных в выражениях и операциях
+	\item Проверка объявления идентификаторов
+	\item Проверка областей видимости --- проверка, что , что переменные и другие идентификаторы используются в
+	рамках своих областей видимости, предотвращая возможные конфликты имён или попытки обращения к
+	несуществующим объектам
+	\item Проверка корректности использования операций --- например, проверка деления на 0
+\end{itemize}
+
+Семантический разбор обычно основывается на специальной символической таблице, которая формируется и
+обновляется в процессе обработки исходного кода. Эта таблица содержит сведения о типах данных,
+объявленных переменных, функциях, классах и других конструкциях языка. При анализе каждой новой
+конструкции компилятор проверяет её корректность, используя информацию из таблицы символов, что
+позволяет обнаруживать ошибки, не выявляемые на этапе синтаксического анализа.
+
+\subsection{Ассоциативность и приоритет операций на примере Bison}
+
+В системах генерации парсеров, таких как Bison\cite{bison}, одной из проблем является разрешение неоднозначностей,
+возникающих при разборе арифметических и логических выражений, где один и тот же набор токенов может
+соответствовать различным структурам дерева разбора. Для решения этой проблемы Bison предоставляет механизм
+задания ассоциативности и приоритета операторов.
+
+В Bison приоритеты и ассоциативность операторов определяются с помощью директив, таких как
+\verb|%left|, \verb|%right| и \verb|%nonassoc|. Эти директивы позволяют:
+
+\begin{itemize}
+	\item \textbf{Установить ассоциативность:}
+	\begin{itemize}
+		 \item \verb|%left| определяет левую ассоциативность, что означает, что цепочка операторов будет
+		 группироваться слева. Например, выражение \verb|a - b - c| интерпретируется как \verb|(a - b) - c|.
+		 \item \verb|%right| задаёт правую ассоциативность, что приводит к группировке справа, как в случае
+		 выражения \verb|a ^ b ^ c|, которое будет разобрано как \verb|a ^ (b ^ c)|.
+		 \item \verb|%nonassoc| используется для операторов, для которых не допускается последовательное
+		 применение без явного указания порядка, что помогает избегать конфликтов.
+	\end{itemize}
+	\item \textbf{Определить приоритет:} Операторы, объявленные позже, автоматически получают более высокий
+	приоритет, чем операторы, указанные ранее. Таким образом, если в грамматике присутствуют, например,
+	как операторы сложения и вычитания, так и операторы умножения и деления, то умножение и деление будут
+	иметь более высокий приоритет, что позволяет корректно интерпретировать выражение \verb|a + b * c| как
+	\verb|a + (b * c)|.
+
+\end{itemize}
+
+Пример объявления операторов в Bison может выглядеть следующим образом:
+
+\begin{verbatim}
+	 %left '+' '-'
+	 %left '*' '/'
+	 %right '^'
+\end{verbatim}
+
+В данном примере:
+\begin{itemize}
+	\item Операторы \verb|+| и \verb|-| обладают одинаковой (левой)
+	ассоциативностью и более низким приоритетом.
+	\item Операторы \verb|*| и \verb|/| также левосторонние,
+	но имеют более высокий приоритет по сравнению с \verb|+| и \verb|-|.
+	\item Оператор \verb|^| обладает
+	наивысшим приоритетом и является правоассоциативным.
+\end{itemize}
+
+\subsection{Технический обзор библиотеки parser\_edsl}
+
+parser\_edsl\cite{parsedsl} – это библиотека на Python\cite{Python}, предназначенная для описания грамматики языка и построения парсеров для них.
+ Основная идея заключается в использовании Embedded Domain Specific Language (EDSL)
+для определения лексических доменов посредством регулярных выражений и синтаксиса грамматики в стиле, похожем
+на Бэкусову нормальную форму (BNF). Такая реализация позволяет в исходном тексте программы задавать правила
+языка в декларативном виде, что упрощает процесс построения компилятора для учебных и исследовательских целей.
+
+Основные компоненты библиотеки включают в себя:
+
+\begin{itemize}
+	\item Инструменты для описания грамматики --- такие классы, как \texttt{Terminal}, \texttt{NonTerminal}, позволяют легко и понятно описывать правила грамматики.
+		Также, для класса\texttt{NonTerminal} поддержана перегрузка оператора \texttt{|=}, которая позволяет не только описывать
+		правило, но и добавить семантическое действие(свертку), которое определяет, как будут
+		вычисляться атрибуты найденных элементов.
+	\item Класс \texttt{Lexer}, реализующий разбиение входного потока на лексемы.
+	\item Класс \texttt{Parser}, реализующий алгоритм LR-разбора.  Библиотека строит LR(0)-автомат, реализует
+	функции closure и goto, а затем формирует таблицу разбора (представлена классом \texttt{ParsingTable}).
+	\item Для информирования пользователя о возникших ошибках при синтаксическом анализе реализован класс \texttt{ParseError}.
+	 При обнаружении неожидаемого символа парсер генерирует исключение с подробным сообщением, в
+	 котором указываются позиция ошибки и символы, которые ожидались на вход.
+\end{itemize}
+
+Также, библиотека написана с объектно-ориентированным подходом, то есть структурирована в виде набора классов,
+что способствует модульности и удобству расширения. Каждый класс содержит только свою функциональность
+(например, лексический анализ, описание грамматики, синтаксический анализ и обработка ошибок).
+
+\section{Разработка расширений для библиотеки}
+
+\subsection{Планируемые изменения в библиотеку}
+
+Основная цель работы заключается в доработке функциональности библиотеки за счёт добавления поддержки лексических
+ошибок, внедрения альтернативных режимов синтаксического разбора (предсказывающий анализ для LL(1)-грамматик
+и алгоритм Эрли), а также реализации механизма задания приоритета и ассоциативности в стиле Bison. В данном разделе
+рассмотрим подробно, что потребуется реализовать в каждом из пунктов технического задания.
+
+\subsubsection{Поддержка ошибки вычисления атрибутов}
+
+Аттрибуты у токенов --- важная часть в работе компилятора. Например, благодаря этому можно находить такие ошибки, как
+деление на 0 и сообщать о них пользователю до выполнения программы. Такие ошибки можно находить и обрабатывать
+на стадии семантического анализа, но что делать, если атрибут вычислить не удается?
+
+Например, у нас идет разбор
+выражения семантического версионирования SemVer. Если проверку на формат и используемые символы можно сделать с помощью
+регулярного выражения, то что делать, если, например, версия должна быть в определенном числовом диапазоне? То есть
+вроде токен и распознался лексическим анализатором, но вычислить его атрибут не получится. В таком случае будет
+крайне полезным выбросить исключение, говорящее об этом, которое парсер правильно обработает и пробросит наверх.
+
+Однако, сейчас в библиотеке есть два типа исключений: \texttt{LexerError} и \texttt{ParseError}, интерфейс которых
+приведен на листинге \ref{lst:curerrros}. Как видно, их интерфейс не позволяет нативно передать информацию об ошибке
+вычисления атрибута.
+
+\begin{listing}[H]
+	\caption{Интерфейс исключений \texttt{LexerError} и \texttt{ParseError}.}
+	\label{lst:curerrros}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/curerrros.py}
+\end{listing}
+
+Следовательно, необходимо разработать новый класс ошибок \texttt{TokenAttributeError}, конструктор которого будет принимать
+сообщение об ошибке и обрабатываться программой для получения пользователем понятной ошибки с указанием позиции,
+где произошла исключительная ситуация. Программа должна будет обернуть исключение в LexerError и потом обернуть его
+в ParseError исключение, которое уже должно будет обрабатываться пользователем.
+
+Также, для улучшения пользовательского
+опыта необходимо предусмотреть в классе ParseError переопределение стандартного сообщения об ошибке, чтобы
+сообщение для пользователя выглядело более лаконично и понятно.
+Например, ошибка может выглядеть так:
+\texttt{Ошибка (1, 4): Слишком большое значение: 300}.
+
+Для тестирования данной функциональности предлагается использовать библиотеку pytest, так как в ней есть все необходимые
+инструменты для проверки, что программа выбрасывает исключение и что именно это за исключение.
+
+\subsubsection{Разработка предсказывающего разбора}
+
+Принцип работы и особенности данного алгоритма разбора были описаны в разделе \ref{sec:ll1int}. Попробуем оценить,
+как лучше этот алгоритм реализовать на основе уже существующей кодовой базы библиотеки, чтобы интегрировать его
+максимально удобно и не вызывая поломок в других частях библиотеки.
+
+В текущей версии \texttt{parser\_edsl} уже реализована хорошая структура кода, отделяющая различные этапы работы
+библиотеки. В реализации нового алгоритма стоит выделить следующие компоненты:
+
+\begin{itemize}
+	\item \textbf{ParseTreeNode} --- узел дерева разбора для LL(1). Узел должен в себе хранить терминал/нетерминал
+	и информацию о них(Token --- в случае терминала и список дочерних узлов в случае нетерминала). Так как класс будет
+	содержать только данные и не обладать никакой сложной логикой, для упрощения разработки стоит использовать для его
+	описания \texttt{dataclass} декоратор из библиотеки \texttt{dataclasses}.
+	\item \textbf{PredictiveParsingTable} --- Таблица предсказывающего анализа. Она должна в себе для пар вида
+	(Нетерминал, Терминал) хранить правило переписывания и функцию свертки, если таковая была задана. Очевидно,
+	что класс таблицы должен обладать методами построения \texttt{Follow} множеств и построения самой таблицы.
+	Оба метода, конечно же, должны будут вызываться в конструкторе таблицы. Также, для упрощения отладки, стоит
+	реализовать метод для красивого текстового вывода таблицы.
+	\item Дополнительные методы для класса \texttt{Parser}: класс нужно будет расширить методами для проведения ll1 разбора,
+	построения таблицы и вычисления атрибутов токенов.
+\end{itemize}
+
+Также необходимо научить алгоритм работать с объектами этой библиотеки, классами для терминалов и нетерминалов, а ещё
+научить алгоритм правильно обрабатывать и выбрасывать библиотечные ошибки, такие как \texttt{LexerError} и \texttt{ParseError}.
+
+\subsubsection{Разработка разбора по алгоритму Эрли}
+
+Принцип работы и особенности данного алгоритма разбора были описаны в разделе \ref{sec:earleyint}. Аналогично
+алгоритму предсказывающего разбора, выделим основные компоненты в реализации и особенности, которые нужно будет учесть
+при реализации.
+
+В реализации данного алгоритма стоит выделить следующие компоненты:
+
+\begin{itemize}
+	\item Класс \texttt{EarleyState}, который представляет собой состояние в алгоритме Эрли. Он должен хранить в себе
+	правило, по которому идет разбор, позицию в этом правиле, позицию в исходном коде, а также должен хранить
+	координаты и атрибуты для завершенных состояний. Для удобства работы с классом стоит воспользоваться декоратором
+	\texttt{dataclass} с опцией \texttt{(frozen=True)}, которая позволяет вычислять хэш для объектов класса.
+	\item Также необходимо реализовать сам алгоритм разбора со всеми его вспомогательными методами, такими как
+	\texttt{predict}, \texttt{scan}, \texttt{complete}. Возможно несколько вариантов реализации:
+	добавить все новые методы в исходный класс или реализовать отдельный класс \texttt{EarleyParser}, который будет
+	выполнять разбор.
+\end{itemize}
+
+Вне зависимости от выбранного пути реализации алгоритма, нужно будет не забыть добавить возможность вызывать разбор
+методом Эрли из старого класса \texttt{Parser}.
+
+\subsubsection{Поддержка ассоциативности и приоритета операций в стиле Bison}
+
+Механизм задания ассоциативности и приоритета операторов, реализованный в Bison, позволяет интуитивно и
+эффективно управлять группировкой выражений, избегая конфликтов при построении таблицы синтаксического анализа.
+
+В реализации данной функциональности в библиотеке \texttt{parser\_edsl} целесообразно выделить следующие компоненты:
+
+\begin{itemize}
+	\item Для представления информации о приоритете и ассоциативности операторов можно добавить базовый класс
+	\texttt{Precedence} и его наследники:
+	\begin{itemize}
+		\item \texttt{Left} для левой ассоциативности,
+		\item \texttt{Right} для правой ассоциативности,
+		\item \texttt{NonAssoc} для операторов без ассоциативности.
+	\end{itemize}
+	Каждый из этих классов будет хранить уровень приоритета (\texttt{level}) и строковое обозначение
+	ассоциативности (\texttt{associativity}), что позволит в дальнейшем сравнивать приоритеты операторов.
+	\item В классе \texttt{NonTerminal} необходимо будет дополнительно перегрузить оператор \verb|__ior__| для добавления
+	возможности описания правил с операциями с ассоциативностью и приоритетом.
+	\item В основном алгоритме разбора, описанном в классе \texttt{Parser}, при обнаружении конфликта
+	shift/reduce будет необходимо:
+	\begin{itemize}
+		\item Из набора возможных действий выделять операция сдвига (\texttt{Shift}) и операция редукции
+		(\texttt{Reduce}).
+		\item Если для правила редукции задана информация о приоритете (объект \texttt{Precedence}),
+		то сравнивать уровень приоритета токена, полученного от лексера, и уровень приоритета правила.
+		\item Приоритет токена выше должен приводить к выполнению сдвига, а ниже --- к редукции.
+		\item При равенстве приоритетов должна учитываться ассоциативность: для левых операторов выбирается редукция,
+		 для правых --- сдвиг; отсутствие ассоциативности должно приводить к генерации ошибки.
+	\end{itemize}
+\end{itemize}
+
+\subsection{Анализ существующей архитектуры и оценка изменений}
+
+Перед внесением изменений необходимо тщательно изучить текущую архитектуру библиотеки \texttt{parser\_edsl}.
+Планируется провести следующий анализ:
+\begin{itemize}
+	\item Оценка текущей модульности системы, что позволит в дальнейшем определить потенциальные места для внедрения новой
+	функциональности и определить, что в библиотеке уже имеется, а что придется реализовывать.
+	\item Оценка риска потенциального ухудшения качества работы библиотеки, как по корректности работы, так и по
+	времени выполнения. Пользователь должен обладать возможностью легко использовать новые сценарии,
+	но при этом важно сохранить обратную совместимость со старой
+	версией библиотеки.
+	\item Оценка наилучших мест в библиотеке для интеграции новой функциональности. Важно спланировать добавление
+	новой функциональности так, чтобы код остался как можно более чистым и без ненужного дублирования каких-то
+	фрагментов.
+\end{itemize}
+
+\subsubsection{Оценка модульности системы}
+
+В процессе анализа исходного кода библиотеки было установлено, что структура проекта соответствует принципам
+объектно-ориентированного программирования. Основные компоненты реализованы следующим образом:
+
+\begin{itemize}
+	\item Лексический анализ --- классы \texttt{Terminal}, \texttt{LiteralTerminal} и \texttt{ErrorTerminal} содержат всю логику,
+	связанную с распознаванием лексем на основе регулярных выражений и точного сопоставления литералов.
+	Эта часть системы достаточно изолирована, что позволяет в будущем добавлять обработку дополнительных исключительных
+	ситуаций (например, дополнительные лексические ошибки) без глобальных изменений.
+	\item Описание грамматики --- класс \texttt{NonTerminal} и связанные с ним механизмы (перегрузка оператора |= для
+	добавления правил, использование семантических действий через \texttt{ExAction}) реализуют декларативное
+	задание грамматики, предоставляя возможность добавлять новую функциональность не нарушая работу парсеров по правилам,
+	написанным в старом формате.
+	\item Класс \texttt{Parser} обладает методом \texttt{parse}, который умеет выполнять только LR(0) разбор.
+	Однако, возможно есть способ переписать функцию так, чтобы она позволяла использовать разные методы разбора,
+	При этом по умолчанию выполняя LR(0) разбор.
+\end{itemize}
+
+\subsubsection{Поиск наилучших мест для интеграции новой функциональности}
+
+После анализа текущего кода библиотеки можно составить следующий план внедрения новой функциональности:
+
+\begin{itemize}
+	\item Для поддержки ошибок вычисления атрибутов токенов наиболее подходящим местом является расширение классов,
+	отвечающих за вычисление атрибутов токенов (например, метод \texttt{match} в классе \texttt{Terminal}).
+	Добавление обработки исключительных ситуаций в классе \texttt{Terminal} позволит обойтись изменениями в
+	пределах лексического анализатора, не затрагивая модуль синтаксического разбора.
+	\item Класс \texttt{Parser} является оптимальным местом для добавления новых методов разбора. Можно не реализовать
+	дополнительные классы Parser, усложняя код. Важно сохранить общий интерфейс для парсера, чтобы
+	пользователи могли выбирать нужный режим без изменения существующего кода.
+	\item Добавление приоритета и ассоциативности операций потребует доработки перегрузки оператора \texttt{|=}
+	у класса \texttt{NonTerminal}, а также в алгоритме разбора нужно будет учитывать ассоциативность операций при
+	shift-reduce конфликтах.
+\end{itemize}
+
+\subsection{Разработка тестирования библиотеки}
+
+Тщательное тестирование является неотъемлемой частью процесса разработки библиотеки, обеспечивая её надёжность,
+корректность и устойчивость при внесении изменений. В рамках разработки тестирования для \texttt{parser\_edsl}
+планируется реализация следующих уровней проверки:
+
+\begin{itemize}
+	\item Написание unit тестов. Unit тесты позволяют тестировать различные сценарии:
+		\begin{itemize}
+			\item Проверка, что уже написанный код работает, также, как и до этого
+			\item Написание тестов на ещё не реализованные части библиотеки, чтобы ускорить процесс реализации
+			благодаря автоматизированному тестированию.
+		\end{itemize}
+	\item Все unit тесты будут встроены в процесс непрерывной интеграции (CI), что позволит автоматически
+	запускать набор тестов при каждом изменении кода. Это обеспечит своевременное обнаружение ошибок и
+	повысит качество конечного кода.
+\end{itemize}
+
+Тестами стоит покрыть уже существующий алгоритм LR(0) разбора, а так же написать тесты под каждую новую функциональность,
+добавляемую в библиотеку.
+
+\section{Реализация расширений для библиотеки}
+
+Для выполнения поставленной задачи необходимо реализовать возможность выбрасывания ошибок вычисления атрибутов,
+новые алгоритмы разбора, а также ассоциативность и приоритет операций.
+
+\subsection{Выбор инструментов разработки}
+
+Вся разработка велась на языке Python, так как на нем реализована библиотека \texttt{parser\_edsl}, а переписывание
+исходной библиотеки на другой язык нецелесообразно. Для разработки использовались следующие, встроенные в
+язык библиотеки:
+
+\begin{itemize}
+	\item abc\cite{abc} --- библиотека предоставляет возможность создания абстрактных базовых классов. Это позволяет
+	создавать интерфейсы с обязательной реализацией определённых методов в
+	наследниках, что помогает структурировать и стандартизировать код.
+	\item collections\cite{collections} --- библиотека содержит специализированные типы данных контейнеров, такие как
+	\texttt{namedtuple}, \texttt{deque}, \texttt{Counter} и другие. Она упрощает работу с коллекциями и
+	предоставляет удобные инструменты для организации данных.
+	\item dataclasses\cite{dataclasses} --- библиотека облегчает создание классов, предназначенных для хранения данных. С помощью
+	декоратора \texttt{@dataclass} автоматически генерируются методы \texttt{\_\_init\_\_}, \texttt{\_\_repr\_\_},
+	\texttt{\_\_eq\_\_} и другие, что сокращает количество шаблонного кода и повышает читаемость.
+\end{itemize}
+
+Для тестирования проекта использовалась библиотека pytest, обладающая всей необходимой функциональностью, включая
+возможность проверять, что программа выбрасывает конкретные типы исключений. Чтобы автоматизировать тестирование,
+был настроен автозапуск тестов в Github Actions\cite{CI}.
+
+\subsection{Реализация расширенной функциональности}
+
+Данный раздел содержит подробное описание изменений в библиотеке, связанных с добавлением новой функциональности.
+
+\subsubsection{Реализация поддержки ошибки вычисления атрибутов}
+
+В результате реализации был добавлен новый тип исключения \texttt{TokenAttributeError}, который наследуется от
+базового класса ошибок библиотеки.
+
+При вызове метода \texttt{match} класса \texttt{Terminal} происходит попытка вычисления атрибута с помощью
+заданной функции. Если функция генерирует исключение \texttt{TokenAttributeError}, оно перехватывается,
+и вызывается функция \texttt{pos\_from\_offset} для вычисления текущей позиции в исходном тексте.
+Затем генерируется исключение \texttt{LexerError} с информацией о месте возникновения проблемы и с
+соответствующим сообщением. Данный механизм позволяет локализовать и корректно обрабатывать ошибки на этапе
+лексического анализа, а в дальнейшем они транслируются в синтаксические ошибки, что облегчает их перехват
+и диагностику. Детали реализации представлены на листинге \ref{lst:error_impl}.
+
+\subsubsection{Реализация предсказывающего разбора}
+
+Для реализации предсказывающего разбора (LL(1)) в библиотеке разработан отдельный механизм, основанный на
+построении таблицы предсказывающего разбора.
+
+Для грамматики создаётся экземпляр класса \texttt{PredictiveParsingTable}, который вычисляет follow-множества
+для всех нетерминалов и заполняет таблицу разбора. При возникновении конфликтов (если для одного и того же
+нетерминала и терминала возможно более одного правила) генерируется исключение
+\texttt{PredictiveTableConflictError}. Детали реализации представлены на листингах \ref{lst:ll1_impl_1}
+- \ref{lst:ll1_impl_3}.
+
+Метод \texttt{parse\_ll1} класса \texttt{Parser} реализует предсказывающий разбор с использованием стека,
+содержащего узлы синтаксического дерева (типа \texttt{ParseTreeNode}). При обработке входного потока токенов
+алгоритм поочерёдно извлекает символ верхушки стека:
+\begin{itemize}
+	\item Если символ является терминалом, он сравнивается с текущим токеном. При совпадении токен добавляется
+	к узлу, и алгоритм переходит к следующему токену.
+	\item Если символ является нетерминалом, производится обращение к LL(1) таблице для выбора соответствующей
+	продукции, после чего нетерминал заменяется на правую часть выбранного правила.
+\end{itemize}
+После завершения разбора синтаксическое дерево обходится с помощью рекурсивного обхода
+(методом \texttt{\_evaluate\_parse\_tree}), что позволяет вычислить итоговый семантический атрибут.
+
+\subsubsection{Реализация разбора по алгоритму Эрли}
+
+Для поддержки более сложных и неоднозначных грамматик реализован разбор по алгоритму Эрли.
+
+Класс \texttt{EarleyState} представляет отдельное состояние алгоритма. Каждый объект этого класса хранит
+правило разбора, позицию точки (dot), начальную и конечную позиции в потоке токенов, а также
+накопленные атрибуты и координаты. Благодаря декоратору \texttt{@dataclass(frozen=True)} объекты состояний
+могут быть использованы в качестве элементов множества. Детали реализации представлены на листингах
+\ref{lst:earley_impl_1} --- \ref{lst:earley_impl_3}.
+
+Класс \texttt{EarleyParser} реализует три ключевые операции:
+\begin{itemize}
+	\item \texttt{predict} --- предсказывает возможные правила для нетерминалов, ожидаемых в текущем состоянии.
+	\item \texttt{scan} --- осуществляет сопоставление терминальных символов с текущим токеном.
+	\item \texttt{complete} --- завершает обработку состояний, если правило разобрано
+	полностью, и добавляет полученные результаты в предшествующие состояния.
+\end{itemize}
+Эти операции используются для поэтапного построения \emph{chart} (таблицы состояний), где на
+каждой позиции входного потока фиксируются все возможные состояния разбора. Итоговая семантика
+возвращается, если найдено единственное корректное состояние, начинающееся с начального символа.
+
+\subsubsection{Реализация поддержки ассоциативности и приоритета операций в стиле Bison}
+
+Для корректного разрешения конфликтов при разборе выражений реализован механизм задания ассоциативности и
+приоритета операций, аналогичный функциональности, предлагаемой Bison.
+
+Введён базовый класс \texttt{Precedence} и его наследники: \texttt{Left}, \texttt{Right} и \texttt{NonAssoc}.
+Каждый из этих классов хранит уровень приоритета (\texttt{level}) и тип ассоциативности (\texttt{associativity}),
+что позволяет однозначно определить порядок применения операторов. Детали реализации представлены на листинге
+\ref{lst:bison_impl}.
+
+В классе \texttt{NonTerminal} изменена перегрузка оператора \texttt{\_\_ior\_\_} для добавления правил
+грамматики с указанием приоритета операцией.
+Если правило передаётся в виде кортежа, где предпоследний элемент является объектом типа \texttt{Precedence},
+то для соответствующего терминала устанавливается приоритет, а информация о приоритете сохраняется вместе с
+продукцией. Это позволяет в дальнейшем использовать эти данные при разрешении конфликтов.
+
+В методе \texttt{parse} класса \texttt{Parser} при обнаружении конфликта между операциями сдвига и редукции
+происходит следующее:
+\begin{itemize}
+	\item Из набора возможных действий выделяются операция сдвига и операция редукции.
+	\item Если для продукции редукции задана информация о приоритете, сравниваются приоритеты токена и
+	продукции. Приоритет токена, вычисляемый по значению \texttt{priority} терминала, используется для
+	определения, какую операцию выполнить.
+	\item При равенстве уровней приоритета используется ассоциативность: для левых операторов выбирается
+	редукция, для правых --- сдвиг; при отсутствии ассоциативности генерируется ошибка.
+\end{itemize}
+
+
+\subsection{Руководство пользователя}
+
+\textbf{1. Установка и подключение библиотеки}
+
+Библиотека написана на Python и не требует сложной установки. Для начала работы достаточно добавить файлы
+библиотеки в проект и импортировать необходимые классы и функции, как представлено на листинге \ref{lst:guide1}.
+
+\begin{listing}[H]
+	\caption{Подключение библиотеки}
+	\label{lst:guide1}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/guide/1.py}
+\end{listing}
+
+\textbf{2. Определение лексических доменов}
+
+Лексический анализ основан на описании терминалов. Для этого используются классы \texttt{Terminal} и
+\texttt{LiteralTerminal}. Можно задать регулярное выражение и функцию преобразования для каждого терминала.
+Пример представлен на листинге \ref{lst:guide2}. Также имеется возможность задавать приоритет терминалов.
+
+\begin{listing}[H]
+	\caption{Описание терминалов}
+	\label{lst:guide2}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/guide/2.py}
+\end{listing}
+
+\textbf{3. Описание грамматики}
+
+Грамматика задаётся через объекты класса \texttt{NonTerminal}. Правила грамматики добавляются с помощью
+оператора \verb||=|, что позволяет декларативно описывать продукции. При необходимости можно включить
+семантические действия и информацию о приоритете операций, используя объекты классов
+\texttt{Left}, \texttt{Right} или \texttt{NonAssoc}. Пример представлен на листинге \ref{lst:guide3}.
+
+\begin{listing}[H]
+	\caption{Описание нетерминалов}
+	\label{lst:guide3}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/guide/3.py}
+\end{listing}
+
+\textbf{4. Инициализация парсера и выбор алгоритма разбора}
+
+После определения грамматики создаётся объект класса \texttt{Parser}. По умолчанию используется алгоритм LALR(1),
+однако библиотека поддерживает и альтернативные режимы, такие как предсказывающий разбор (LL(1)) и
+алгоритм Эрли. Для использования альтернативных алгоритмов доступны методы \texttt{parse\_ll1} и
+\texttt{parse\_earley}. Пример представлен на листинге \ref{lst:guide4}.
+
+\begin{listing}[H]
+	\caption{Создание парсера и выполнение разбора}
+	\label{lst:guide4}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/guide/4.py}
+\end{listing}
+
+\textbf{5. Обработка ошибок}
+
+При разборе возможны ошибки лексического или синтаксического анализа. Библиотека генерирует
+исключения типа \texttt{ParseError} с подробной информацией о позиции ошибки и ожидаемых символах.
+Это позволяет быстро находить и устранять проблемы в описании грамматики или входном тексте.
+
+\textbf{6. Тестирование и отладка}
+
+Для проверки корректности работы парсера рекомендуется использовать встроенные функции для печати таблицы разбора
+(\texttt{print\_table}) и предсказывающей таблицы (\texttt{stringify\_ll1\_table}).
+
+\section{Тестирование}
+
+\subsection{Подготовка тестов}
+
+Для тестирования библиотеки были подготовлены следующие наборы unit тестов:
+
+\begin{itemize}
+	\item Тесты для LALR разбора.
+	\item Тесты для выбрасывания \texttt{TokenAttributeError} исключений
+	\item Тесты для разбора по алгоритму предсказывающего анализатора.
+	\item Тесты для алгоритма Эрли
+	\item Тесты на арифметические выражения с разной ассоциативностью и различным приоритетом.
+\end{itemize}
+
+\subsection{Проведение тестирования}
+
+Тестирование проводилось путем запуска pytest и проверки на успешное выполнение всех тестов.
+Чтобы процесс тестирования был более прозрачным и автоматическим, их запуск был добавлен в Github Actions репозитория
+с курсовой работой. Конфигурация github actions представлена на листинге \ref{lst:ghact}.
+
+\begin{listing}[H]
+	\caption{Создание парсера и выполнение разбора}
+	\label{lst:ghact}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/a.yaml}
+\end{listing}
+
+В результате удалось добиться успешного выполнения 100\% тестов.
+
+\anonsection{Заключение}
+
+В ходе выполнения данной курсовой работы была проведен анализ и оценка кодовой базы и архитектуры библиотеки
+\texttt{parser\_edsl}, что позволило разработать добавление расширенной функциональности в библиотеку и в последствии
+успешно реализовать её.
+
+В результате работы были реализованы следующие расширения функциональности:
+
+\begin{itemize}
+	\item Добавлен механизм перехвата и обработки исключений, возникающих при вычислении атрибутов токенов,
+	что позволяет обнаруживать ошибки на этапе лексического анализа и улучшает диагностику проблем.
+	\item Разработан и интегрирован модуль, позволяющий строить предсказывающую таблицу и выполнять разбор
+	с использованием алгоритма предсказывающего разбора. Это обеспечивает возможность эффективной работы с
+	грамматиками, удовлетворяющими требованию LL(1), и повышает гибкость библиотеки.
+	\item Внедрение алгоритма Эрли позволило расширить область применения библиотеки,
+	обеспечив поддержку более сложных и неоднозначных грамматик.
+	\item Реализован механизм задания приоритетов и ассоциативности операторов, что позволяет автоматически
+	разрешать конфликтные ситуации типа shift/reduce и корректно обрабатывать выражения,
+	содержащие операторы с различными уровнями приоритета.
+\end{itemize}
+
+Несмотря на достигнутые успехи, остаётся ряд направлений для дальнейшего улучшения библиотеки, включая оптимизацию
+алгоритмов, добавление других алгоритмов разбора, расширение тестового покрытия и добавление взаимодействия
+с другими инструментами анализа. В целом, проделанная работа является важным шагом в развитии инструментов
+для конструирования компиляторов и может служить основой для будущих исследований и улучшений в данной области.
+
+\renewcommand\refname{СПИСОК ИСПОЛЬЗУЕМЫХ ИСТОЧНИКОВ}
+% Список литературы
+\clearpage
+%\bibliographystyle{ugost2008s}  %utf8gost71u.bst} %utf8gost705u} %gost2008s}
+{\catcode`"\active\def"{\relax}
+\addcontentsline{toc}{section}{\protect\numberline{}\refname}%
+%\bibliography{biblio} %здесь ничего не меняем, кроме, возможно, имени bib-файла
+\printbibliography
+}
+
+\newpage
+
+\anonsection{ПРИЛОЖЕНИЕ А}
+\vspace{-30pt}
+
+\begin{listing}[H]
+	\caption{Реализация поддержки ошибки вычисления токенов.}
+	\label{lst:error_impl}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/error.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Реализация алгоритма предсказывающего разбора.}
+	\label{lst:ll1_impl_1}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/ll1_1.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Класс PredictiveParsingTable.}
+	\label{lst:ll1_impl_2}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/ll1_2.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Класс PredictiveParsingTable. Продолжение.}
+	\label{lst:ll1_impl_3}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/ll1_3.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Реализация алгоритма Эрли.}
+	\label{lst:earley_impl_1}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/earley_1.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Реализация алгоритма Эрли.}
+	\label{lst:earley_impl_2}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/earley_2.py}
+\end{listing}
+
+\begin{listing}[H]
+	\caption{Реализация алгоритма Эрли.}
+	\label{lst:earley_impl_3}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/earley_3.py}
+\end{listing}
+
+
+\begin{listing}[H]
+	\caption{Реализация ассоциативности и приоритета операций.}
+	\label{lst:bison_impl}
+	\inputminted[style=bw, frame=single,fontsize = \footnotesize, linenos=false, xleftmargin = 1.5em]{python}{./listings/bison.py}
+\end{listing}
+
+\end{document}
