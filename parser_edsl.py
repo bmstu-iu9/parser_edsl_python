@@ -507,7 +507,7 @@ class TokenAttributeError(Error):
         self.bad = text
 
     def __repr__(self):
-        return f'TokenAttributeError({self.pos!r},{self.bad!r})'
+        return f'TokenAttributeError({self.pos!r}, {self.bad!r})'
 
     @property
     def message(self):
@@ -526,8 +526,8 @@ class ParseError(Error):
         if self._text != "":
             return self._text
         expected = ', '.join(map(str, self.expected))
-        return f'Неожиданный символ {self.unexpected}, ' \
-                + f'ожидалось {expected}'
+        return (f'Неожиданный символ {self.unexpected}, '
+                f'ожидалось {expected}')
 
 
 class PredictiveTableConflictError(Error):
@@ -1167,10 +1167,15 @@ class EarleyParser:
             elif not isinstance(state, list) or len(token.attr) > 1:
                 new_attrs = state.attrs + [token.attr]
             else:
-                 new_attrs = state.attrs + token.attr
+                new_attrs = state.attrs + token.attr
 
             new_coords = state.coords + (token.pos,)
-            new_state = EarleyState(state.rule, state.dot + 1, state.start, pos + 1, new_attrs, new_coords)
+            new_state = EarleyState(state.rule,
+                                    state.dot + 1,
+                                    state.start,
+                                    pos + 1,
+                                    new_attrs,
+                                    new_coords)
             if new_state.is_complete():
                 _, _, fold = new_state.rule
                 coords = new_state.coords
@@ -1248,7 +1253,9 @@ class EarleyParser:
                         elif isinstance(next_sym, NonTerminal):
                             expected_set.update(self.grammar.first_set([next_sym]) - {None})
                 expected_list = list(expected_set)
-                raise ParseError(tokens[pos-1].pos.start, unexpected=tokens[pos-1], expected=expected_list)
+                raise ParseError(tokens[pos-1].pos.start,
+                                 unexpected=tokens[pos-1],
+                                 expected=expected_list)
 
             i = 0
             while i  < len(states):
@@ -1266,9 +1273,16 @@ class EarleyParser:
                 i+=1
                 self.chart[pos].update(states)
 
-        final_states = [state for state in self.chart[len(tokens)] if state.rule[0] == self.grammar.start and state.is_complete() and state.start == 0]
+        final_states = [state
+                        for state in self.chart[len(tokens)]
+                        if (state.rule[0] == self.grammar.start
+                            and state.is_complete()
+                            and state.start == 0)]
         if len(final_states) > 1:
-            raise ParseError(pos=Position(), expected="", unexpected="", _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
+            raise ParseError(pos=Position(),
+                             expected="",
+                             unexpected="",
+                             _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
         if final_states:
             return final_states[0].attrs[0]
 
