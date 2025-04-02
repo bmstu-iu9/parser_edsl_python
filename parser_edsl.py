@@ -1125,7 +1125,8 @@ class EarleyState:
     coords: tuple = ()
 
     def __post_init__(self):
-        object.__setattr__(self, 'coords', tuple(self.coords))
+        if type(self.coords) is not tuple:
+            object.__setattr__(self, 'coords', tuple(self.coords))
 
     def __repr__(self):
         lhs, rhs, _ = self.rule
@@ -1148,14 +1149,21 @@ class EarleyParser:
         self.grammar = grammar
         self.chart = collections.defaultdict(set)
 
-    def predict(self, state, pos, states):
+    def predict(self, state, pos, coords, states):
+        if not isinstance(coords, tuple):
+            coords = (coords,)
         next_sym = state.next_symbol()
         if isinstance(next_sym, NonTerminal):
             for prod, fold, _ in next_sym.enum_rules():
-                new_state = EarleyState((next_sym, tuple(prod), fold), 0, pos, pos, attrs=[])
+                new_state = EarleyState((next_sym, tuple(prod), fold),
+                                        0,
+                                        pos,
+                                        pos,
+                                        attrs=[],
+                                        coords=coords)
                 if new_state not in self.chart[pos] and new_state not in states:
                     states.append(new_state)
-                    self.predict(new_state, pos, states)
+                    self.predict(new_state, pos, coords, states)
 
     def scan(self, state, token, pos):
         next_sym = state.next_symbol()
@@ -1215,7 +1223,7 @@ class EarleyParser:
                 if new_state not in self.chart[pos]:
                     states.append(new_state)
                     if not new_state.is_complete():
-                        self.predict(new_state, pos, states)
+                        self.predict(new_state, pos, new_coords, states)
                 if new_state.is_complete():
                     _, _, fold = new_state.rule
                     # if new_state.attrs is not None:
@@ -1265,7 +1273,7 @@ class EarleyParser:
                     # print(next_sym)
                     if isinstance(next_sym, NonTerminal):
                         # print('a', next_sym)
-                        self.predict(state, pos, states)
+                        self.predict(state, pos, tokens[pos].pos, states)
                     elif pos < len(tokens):
                         self.scan(state, tokens[pos], pos)
                 else:
