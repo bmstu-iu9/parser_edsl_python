@@ -23,3 +23,24 @@ def test_undefiened_grammar():
 
     with pytest.raises(pe.ParseError):
         result = parser.parse_earley("42+3-5")
+
+
+def test_epsilon_rule_empty_grammar():
+    expr = pe.NonTerminal('expr')
+    expr |= ()
+
+    parser = pe.Parser(expr)
+
+    assert parser.parse_earley("") == None
+
+
+def test_epsilon_rule():
+    expr = pe.NonTerminal('expr')
+    expr |= ('a', expr, lambda _: None)
+    expr |= ()
+
+    parser = pe.Parser(expr)
+
+    assert parser.parse_earley("aaa") == None
+
+

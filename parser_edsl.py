@@ -1273,7 +1273,10 @@ class EarleyParser:
                     # print(next_sym)
                     if isinstance(next_sym, NonTerminal):
                         # print('a', next_sym)
-                        self.predict(state, pos, tokens[pos].pos, states)
+                        coords = Fragment(Position(), Position())
+                        if len(tokens) > 0:
+                            coords = tokens[min(pos, len(tokens)-1)].pos
+                        self.predict(state, pos, coords, states)
                     elif pos < len(tokens):
                         self.scan(state, tokens[pos], pos)
                 else:
@@ -1291,7 +1294,7 @@ class EarleyParser:
                              expected="",
                              unexpected="",
                              _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
-        if final_states:
+        if final_states and final_states[0].attrs:
             return final_states[0].attrs[0]
 
     def print_chart(self):
