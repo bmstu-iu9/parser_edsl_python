@@ -44,3 +44,15 @@ def test_epsilon_rule():
     assert parser.parse_earley("aaa") == None
 
 
+def test_epsilon_rule_attrs():
+    NAr = pe.NonTerminal("NAr")
+    ARRAY = pe.Terminal("array", "array", lambda _: None, priority=10)
+
+    NAr |= ARRAY, NAr, lambda x: x + 1
+    NAr |= lambda: 0
+
+    p = pe.Parser(NAr)
+    p.add_skipped_domain("\\s")
+
+    assert p.parse_earley("array  array") == 1
+    assert p.parse_earley("  ") == 0
