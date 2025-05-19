@@ -37,7 +37,7 @@ def test_epsilon_rule_empty_grammar():
 def test_epsilon_rule():
     expr = pe.NonTerminal('expr')
     expr |= ('a', expr, lambda _: None)
-    expr |= ()
+    expr |= (lambda: None)
 
     parser = pe.Parser(expr)
 
@@ -54,5 +54,5 @@ def test_epsilon_rule_attrs():
     p = pe.Parser(NAr)
     p.add_skipped_domain("\\s")
 
-    assert p.parse_earley("array  array") == 1
+    assert p.parse_earley("array  array") == 2
     assert p.parse_earley("  ") == 0

@@ -1155,15 +1155,55 @@ class EarleyParser:
         next_sym = state.next_symbol()
         if isinstance(next_sym, NonTerminal):
             for prod, fold, _ in next_sym.enum_rules():
-                new_state = EarleyState((next_sym, tuple(prod), fold),
+                if not prod:
+                    attrs = state.attrs
+                    if not attrs:
+                        attrs = []
+                    res_coord = Fragment(coords[0].start, coords[-1].following)
+                    attrs = attrs+[fold.callee([], coords, res_coord)]
+                    new_state = EarleyState(state.rule,
+                                            state.dot + 1,
+                                            state.start,
+                                            pos,
+                                            attrs,
+                                            coords)
+
+                    if new_state.is_complete():
+                        _, _, fold1 = new_state.rule
+                        coords = new_state.coords
+                        res_coord = Fragment(coords[0].start, coords[-1].following)
+                        res_attr = fold1.callee(attrs, coords, res_coord)
+                        new_state = dataclasses.replace(new_state, attrs=[res_attr])
+
+                    if new_state not in self.chart[pos] and new_state not in states:
+                        states.append(new_state)
+                        self.chart[pos].add(new_state)
+
+                    new_state = EarleyState((next_sym, tuple(prod), fold),
                                         0,
                                         pos,
                                         pos,
                                         attrs=[],
                                         coords=coords)
-                if new_state not in self.chart[pos] and new_state not in states:
-                    states.append(new_state)
-                    self.predict(new_state, pos, coords, states)
+                    if new_state.is_complete():
+                        _, _, fold = new_state.rule
+                        coords = new_state.coords
+                        res_coord = Fragment(coords[0].start, coords[-1].following)
+                        res_attr = fold.callee([], coords, res_coord)
+                        new_state = dataclasses.replace(new_state, attrs=[res_attr])
+
+                    if new_state not in self.chart[pos] and new_state not in states:
+                        states.append(new_state)
+                else:
+                    new_state = EarleyState((next_sym, tuple(prod), fold),
+                                        0,
+                                        pos,
+                                        pos,
+                                        attrs=[],
+                                        coords=coords)
+                    if new_state not in self.chart[pos] and new_state not in states:
+                        states.append(new_state)
+                        self.predict(new_state, pos, coords, states)
 
     def scan(self, state, token, pos):
         next_sym = state.next_symbol()
@@ -1195,6 +1235,9 @@ class EarleyParser:
             self.chart[pos + 1].add(new_state)
 
     def complete(self, state: EarleyState, pos, states: list[EarleyState]):
+        _, rhs, _ = state.rule
+        if not rhs:
+            return
         for prev_state in self.chart[state.start]:
             next_sym = prev_state.next_symbol()
             if next_sym == state.rule[0]:
@@ -1289,12 +1332,13 @@ class EarleyParser:
                         if (state.rule[0] == self.grammar.start
                             and state.is_complete()
                             and state.start == 0)]
+
         if len(final_states) > 1:
             raise ParseError(pos=Position(),
                              expected="",
                              unexpected="",
                              _text=f"Неопределенная грамматика: найдено {len(final_states)} путей разбора")
-        if final_states and final_states[0].attrs:
+        if final_states:
             return final_states[0].attrs[0]
 
     def print_chart(self):
