@@ -1271,7 +1271,7 @@ class EarleyParser:
                 if not state.is_complete():
                     next_sym = state.next_symbol()
                     # print(next_sym)
-                    if isinstance(next_sym, NonTerminal):
+                    if pos < len(tokens) and isinstance(next_sym, NonTerminal):
                         # print('a', next_sym)
                         self.predict(state, pos, tokens[pos].pos, states)
                     elif pos < len(tokens):
