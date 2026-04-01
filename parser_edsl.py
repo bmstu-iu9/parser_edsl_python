@@ -104,26 +104,6 @@ class Prio:
     priority: float
 
 
-# ============== Пользовательские лексические ошибки ==============
-
-class LexerUserError(Exception):
-    """Исключение для пользовательских лексических ошибок"""
-    def __init__(self, message, pos=None):
-        self.user_message = message
-        self.pos = pos
-        super().__init__(message)
-
-    @property
-    def message(self):
-        if self.pos:
-            return f'{self.pos}: {self.user_message}'
-        return self.user_message
-
-
-# Алиас для обратной совместимости
-TokenAttributeError = LexerUserError
-
-
 # ============== Символы грамматики ==============
 
 class Symbol:
@@ -716,6 +696,26 @@ class Error(Exception, abc.ABC):
 
     def __str__(self):
         return self.message
+
+
+# ============== Пользовательские лексические ошибки ==============
+
+class LexerUserError(Error):
+    """Исключение для пользовательских лексических ошибок"""
+    def __init__(self, message, pos=None):
+        self.user_message = message
+        self.pos = pos
+        super().__init__(message)
+
+    @property
+    def message(self):
+        if self.pos:
+            return f'{self.pos}: {self.user_message}'
+        return self.user_message
+
+
+# Алиас для обратной совместимости
+TokenAttributeError = LexerUserError
 
 
 @dataclasses.dataclass
